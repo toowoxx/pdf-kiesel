@@ -5,7 +5,5 @@ internal object PdfBridge {
         System.loadLibrary("pdfgen")
     }
 
-    external fun generatePdf(json: String): ByteArray
-
     external fun generatePdfTree(json: String): ByteArray
 }

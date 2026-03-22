@@ -263,8 +263,8 @@ sealed interface DocumentNode {
 
 @Serializable
 data class TreePage(
-    val width: Float = PdfPage.A4_WIDTH,
-    val height: Float = PdfPage.A4_HEIGHT,
+    val width: Float = PageSize.A4_WIDTH,
+    val height: Float = PageSize.A4_HEIGHT,
     val margin: TreeMargin = TreeMargin(),
     val background: PdfColor? = null,
     val splitStrategy: TreeSplitStrategy = TreeSplitStrategy.NONE,

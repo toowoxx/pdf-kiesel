@@ -2,7 +2,6 @@ package de.toowoxx.pdfkiesel.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 @Serializable
 data class PdfColor(val r: Float, val g: Float, val b: Float) {
@@ -145,26 +144,7 @@ sealed interface PdfElement {
     @Serializable @SerialName("clipEnd") data object ClipEnd : PdfElement
 }
 
-@Serializable
-data class PdfPage(
-    val width: Float = A4_WIDTH,
-    val height: Float = A4_HEIGHT,
-    val elements: List<PdfElement> = emptyList(),
-) {
-    companion object {
-        const val A4_WIDTH = 595.28f
-        const val A4_HEIGHT = 841.89f
-    }
-}
-
-@Serializable
-data class PdfDocument(
-    val pages: List<PdfPage> = emptyList(),
-    val fonts: Map<String, PdfFontDef> = emptyMap(),
-) {
-    fun toJson(): String = PDF_JSON.encodeToString(this)
-
-    companion object {
-        private val PDF_JSON = Json { encodeDefaults = true }
-    }
+object PageSize {
+    const val A4_WIDTH = 595.28f
+    const val A4_HEIGHT = 841.89f
 }

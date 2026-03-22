@@ -1,6 +1,5 @@
 package de.toowoxx.pdfkiesel
 
-import de.toowoxx.pdfkiesel.model.PdfDocument
 import de.toowoxx.pdfkiesel.model.TreeDocument
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
@@ -11,7 +10,6 @@ import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
 import pdfgen.pdfgen_free
 import pdfgen.pdfgen_free_error
-import pdfgen.pdfgen_generate
 import pdfgen.pdfgen_generate_tree
 
 @OptIn(ExperimentalForeignApi::class)
@@ -20,13 +18,6 @@ private data class PdfGenOutput(
     val len: ULong,
     val errorPtr: CPointer<ByteVar>?,
 )
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun PdfDocument.renderToBytes(): ByteArray {
-    val json = toJson()
-    val result = pdfgen_generate(json).useContents { PdfGenOutput(data, len, this.error) }
-    return extractPdfBytes(result)
-}
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun TreeDocument.renderToBytes(): ByteArray {

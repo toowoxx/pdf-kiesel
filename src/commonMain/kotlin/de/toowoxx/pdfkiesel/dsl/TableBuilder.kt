@@ -6,8 +6,6 @@ import de.toowoxx.pdfkiesel.model.PdfColor
 @PdfDslMarker
 class TableBuilder
 internal constructor(
-    private val startX: Float,
-    private val startY: Float,
     private val tableWidth: Float,
 ) {
     private val rows = mutableListOf<TableRow>()
@@ -32,52 +30,36 @@ internal constructor(
         rows.add(TableRow(builder.cells, isHeader))
     }
 
-    private fun resolveGrid(): Pair<List<Float>, List<GridRowDef>> {
-        val numCols = rows.maxOfOrNull { it.cells.size } ?: return emptyList<Float>() to emptyList()
-        val resolvedWidths = columnWidths ?: List(numCols) { tableWidth / numCols }
-
-        val gridRows =
-            rows.mapIndexed { rowIndex, row ->
-                val bg =
-                    when {
-                        row.isHeader -> headerBackground
-                        alternateRowBackground != null && rowIndex % 2 == 1 ->
-                            alternateRowBackground
-                        else -> null
-                    }
-                val gridCells =
-                    row.cells.map { cell ->
-                        val cellFont = cell.font.ifEmpty { font }
-                        val child = ParagraphNode(
-                            content = cell.content,
-                            fontSize = cell.fontSize,
-                            font = cellFont,
-                            color = cell.color,
-                            align = cell.align,
-                            lineSpacing = 1.3f,
-                            bold = cell.bold,
-                            markdown = markdown,
-                        )
-                        GridCellDef(columnSpan = 1, children = listOf(child))
-                    }
-                GridRowDef(gridCells, bg)
-            }
-
-        return resolvedWidths to gridRows
-    }
-
-    internal fun build(): ViewLayout {
-        val (resolvedWidths, gridRows) = resolveGrid()
-        if (resolvedWidths.isEmpty()) return ViewLayout(emptyList(), 0f)
-        val grid = GridNode(resolvedWidths, gridRows, Padding(cellPadding), borderColor)
-        return grid.layout(startX, startY, tableWidth)
-    }
-
     internal fun buildNode(): DocumentNode {
-        val (resolvedWidths, gridRows) = resolveGrid()
-        if (resolvedWidths.isEmpty()) return DocumentNode.Column(children = emptyList())
+        val numCols = rows.maxOfOrNull { it.cells.size }
+            ?: return DocumentNode.Column(children = emptyList())
+        val resolvedWidths = columnWidths ?: List(numCols) { tableWidth / numCols }
         val columnDefs = resolvedWidths.map { GridColumnDef.Fixed(it) }
-        val grid = GridNode(resolvedWidths, gridRows, Padding(cellPadding), borderColor, columnDefs)
+
+        val gridRows = rows.mapIndexed { rowIndex, row ->
+            val bg = when {
+                row.isHeader -> headerBackground
+                alternateRowBackground != null && rowIndex % 2 == 1 -> alternateRowBackground
+                else -> null
+            }
+            val gridCells = row.cells.map { cell ->
+                val cellFont = cell.font.ifEmpty { font }
+                val child = ParagraphNode(
+                    content = cell.content,
+                    fontSize = cell.fontSize,
+                    font = cellFont,
+                    color = cell.color,
+                    align = cell.align,
+                    lineSpacing = 1.3f,
+                    bold = cell.bold,
+                    markdown = markdown,
+                )
+                GridCellDef(columnSpan = 1, children = listOf(child))
+            }
+            GridRowDef(gridCells, bg)
+        }
+
+        val grid = GridNode(gridRows, columnDefs, Padding(cellPadding), borderColor)
         return grid.toNode()
     }
 }

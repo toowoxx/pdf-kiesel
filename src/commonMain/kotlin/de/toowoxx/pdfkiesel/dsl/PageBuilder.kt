@@ -190,7 +190,7 @@ internal constructor(
         val resolvedWidths = resolveColumnWidths(columns, availableWidth)
         val scope = GridScope(resolvedWidths)
         scope.block()
-        children.add(GridNode(resolvedWidths, scope.rows, cellPadding, borderColor, columns))
+        children.add(GridNode(scope.rows, columns, cellPadding, borderColor))
     }
 
     fun stack(

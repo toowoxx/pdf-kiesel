@@ -1,12 +1,10 @@
 package de.toowoxx.pdfkiesel.dsl
 
-import de.toowoxx.pdfkiesel.model.DocumentNode
 import de.toowoxx.pdfkiesel.model.PdfColor
-import de.toowoxx.pdfkiesel.model.PdfDocument
-import de.toowoxx.pdfkiesel.model.PdfElement
 import de.toowoxx.pdfkiesel.model.PdfFontDef
-import de.toowoxx.pdfkiesel.model.PdfPage
+import de.toowoxx.pdfkiesel.model.PdfElement
 import de.toowoxx.pdfkiesel.model.PdfPoint
+import de.toowoxx.pdfkiesel.model.PageSize
 import de.toowoxx.pdfkiesel.model.TreeDocument
 import de.toowoxx.pdfkiesel.model.TreeMargin
 import de.toowoxx.pdfkiesel.model.TreePage
@@ -16,84 +14,12 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 @DslMarker annotation class PdfDslMarker
 
-fun pdfDocument(block: DocumentBuilder.() -> Unit): PdfDocument {
+fun pdfDocument(block: DocumentBuilder.() -> Unit): TreeDocument {
     return DocumentBuilder().apply(block).build()
-}
-
-fun pdfTreeDocument(block: TreeDocumentBuilder.() -> Unit): TreeDocument {
-    return TreeDocumentBuilder().apply(block).build()
 }
 
 @PdfDslMarker
 class DocumentBuilder {
-    private val pages = mutableListOf<PdfPage>()
-    private val fonts = mutableMapOf<String, PdfFontDef>()
-
-    @OptIn(ExperimentalEncodingApi::class)
-    fun registerFont(name: String, data: ByteArray) {
-        fonts[name] = PdfFontDef(data = Base64.encode(data))
-    }
-
-    fun page(
-        width: Float = PdfPage.A4_WIDTH,
-        height: Float = PdfPage.A4_HEIGHT,
-        margin: Margin = Margin(),
-        background: PdfColor? = null,
-        block: PageBuilder.() -> Unit,
-    ) {
-        val contentWidth = width - margin.left - margin.right
-        val scope = PageBuilder(contentWidth)
-        scope.block()
-        val views = buildList {
-            if (background != null) {
-                add(OverlayNode(PdfElement.Rect(0f, 0f, width, height, background)))
-            }
-            addAll(scope.children)
-        }
-        val layout = ColumnNode(0f, views).layout(margin.left, height - margin.top, contentWidth)
-        pages.add(PdfPage(width, height, layout.elements))
-    }
-
-    fun pagedContent(
-        width: Float = PdfPage.A4_WIDTH,
-        height: Float = PdfPage.A4_HEIGHT,
-        margin: Margin = Margin(),
-        background: PdfColor? = null,
-        splitStrategy: PageSplitStrategy = PageSplitStrategy.SPLIT_NEAREST_VIEW,
-        block: PageBuilder.() -> Unit,
-    ) {
-        val contentWidth = width - margin.left - margin.right
-        val contentHeight = height - margin.top - margin.bottom
-        val scope = PageBuilder(contentWidth)
-        scope.block()
-
-        val pageElementLists =
-            Paginator.paginate(
-                children = scope.children,
-                x = margin.left,
-                startY = height - margin.top,
-                maxWidth = contentWidth,
-                gap = 0f,
-                pageContentHeight = contentHeight,
-                strategy = splitStrategy,
-            )
-
-        for (elements in pageElementLists) {
-            val pageElements = buildList {
-                if (background != null) {
-                    add(PdfElement.Rect(0f, 0f, width, height, background))
-                }
-                addAll(elements)
-            }
-            pages.add(PdfPage(width, height, pageElements))
-        }
-    }
-
-    internal fun build(): PdfDocument = PdfDocument(pages.toList(), fonts.toMap())
-}
-
-@PdfDslMarker
-class TreeDocumentBuilder {
     private val pages = mutableListOf<TreePage>()
     private val fonts = mutableMapOf<String, PdfFontDef>()
 
@@ -103,8 +29,8 @@ class TreeDocumentBuilder {
     }
 
     fun page(
-        width: Float = PdfPage.A4_WIDTH,
-        height: Float = PdfPage.A4_HEIGHT,
+        width: Float = PageSize.A4_WIDTH,
+        height: Float = PageSize.A4_HEIGHT,
         margin: Margin = Margin(),
         background: PdfColor? = null,
         block: PageBuilder.() -> Unit,
@@ -125,8 +51,8 @@ class TreeDocumentBuilder {
     }
 
     fun pagedContent(
-        width: Float = PdfPage.A4_WIDTH,
-        height: Float = PdfPage.A4_HEIGHT,
+        width: Float = PageSize.A4_WIDTH,
+        height: Float = PageSize.A4_HEIGHT,
         margin: Margin = Margin(),
         background: PdfColor? = null,
         splitStrategy: PageSplitStrategy = PageSplitStrategy.SPLIT_NEAREST_VIEW,
