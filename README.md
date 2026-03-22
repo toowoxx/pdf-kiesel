@@ -33,7 +33,7 @@ import de.toowoxx.pdfkiesel.dsl.*
 import de.toowoxx.pdfkiesel.model.PdfColor
 import de.toowoxx.pdfkiesel.renderToBytes
 
-val doc = pdfTreeDocument {
+val doc = pdfDocument {
     pagedContent {
         text("Hello, PDF!") {
             fontSize = 24f
@@ -64,14 +64,9 @@ val pdfBytes: ByteArray = doc.renderToBytes()
 
 ## DSL Reference
 
-### Document Builders
+### Document Builder
 
-| Builder | Description |
-|---------|-------------|
-| `pdfTreeDocument { }` | Tree-based document with Parley text layout (recommended) |
-| `pdfDocument { }` | Simple document with Helvetica-based layout |
-
-Both builders support `page()` for single pages and `pagedContent()` for automatic page splitting.
+`pdfDocument { }` is the entry point. It supports `page()` for single pages and `pagedContent()` for automatic page splitting.
 
 ### Page Content
 
@@ -188,7 +183,7 @@ canvas(height = 200f) {
 ### Custom Fonts
 
 ```kotlin
-pdfTreeDocument {
+pdfDocument {
     registerFont("MyFont", fontBytes)  // TTF or OTF ByteArray
 
     pagedContent {
@@ -200,7 +195,7 @@ pdfTreeDocument {
 ### Page Configuration
 
 ```kotlin
-pdfTreeDocument {
+pdfDocument {
     pagedContent(
         width = PdfPage.A4_WIDTH,
         height = PdfPage.A4_HEIGHT,
@@ -219,7 +214,7 @@ pdfTreeDocument {
 Kotlin DSL (commonMain)
     │
     ├─ pdfDocument { }       → PdfDocument (JSON) → Rust render()
-    └─ pdfTreeDocument { }   → TreeDocument (JSON) → Rust render_tree()
+    └─ pdfDocument { }   → TreeDocument (JSON) → Rust render_tree()
                                                           │
                                               ┌───────────┴───────────┐
                                               │   Parley (text layout) │
