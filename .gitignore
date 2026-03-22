@@ -1,0 +1,18 @@
+*.iml
+.kotlin
+.gradle
+**/build/
+.idea
+.DS_Store
+
+# Rust build artifacts (use buildRust / buildRustIos to build)
+rust/target/
+rust/.cargo/
+
+# Compiled native libraries
+src/androidMain/jniLibs/
+iosFrameworks/
+*.a
+*.so
+
+local.properties

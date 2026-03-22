@@ -1,0 +1,3 @@
+headers = pdfgen.h
+headerFilter = pdfgen.h
+staticLibraries = libpdfgen.a
