@@ -6,7 +6,7 @@ mod tree;
 
 // ---- JNI interface (Android) ----
 
-#[cfg(feature = "android")]
+#[cfg(any(feature = "android", feature = "jvm"))]
 mod jni_bridge {
     use jni::objects::{JClass, JString};
     use jni::sys::jbyteArray;

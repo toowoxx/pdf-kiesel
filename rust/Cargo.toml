@@ -22,3 +22,4 @@ krilla-svg = "0.3"
 [features]
 default = ["android"]
 android = ["jni"]
+jvm = ["jni"]
