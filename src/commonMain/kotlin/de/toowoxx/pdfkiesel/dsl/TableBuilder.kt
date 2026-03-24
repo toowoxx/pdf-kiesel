@@ -50,7 +50,7 @@ internal constructor(
                     font = cellFont,
                     color = cell.color,
                     align = cell.align,
-                    lineSpacing = 1.3f,
+                    lineSpacing = cell.lineSpacing ?: 1.3f,
                     bold = cell.bold,
                     markdown = markdown,
                 )
@@ -78,6 +78,7 @@ class TableRowBuilder internal constructor() {
                 color = style.color,
                 align = style.align,
                 bold = style.bold,
+                lineSpacing = style.lineSpacing,
             )
         )
     }
@@ -89,6 +90,7 @@ class CellStyle {
     var color: PdfColor = PdfColor.BLACK
     var align: TextAlign = TextAlign.LEFT
     var bold: Boolean = false
+    var lineSpacing: Float? = null
 }
 
 internal data class TableCell(
@@ -98,6 +100,7 @@ internal data class TableCell(
     val color: PdfColor,
     val align: TextAlign,
     val bold: Boolean = false,
+    val lineSpacing: Float? = null,
 )
 
 internal data class TableRow(val cells: List<TableCell>, val isHeader: Boolean)
