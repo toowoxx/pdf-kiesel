@@ -43,18 +43,25 @@ internal constructor(
                 else -> null
             }
             val gridCells = row.cells.map { cell ->
-                val cellFont = cell.font.ifEmpty { font }
-                val child = ParagraphNode(
-                    content = cell.content,
-                    fontSize = cell.fontSize,
-                    font = cellFont,
-                    color = cell.color,
-                    align = cell.align,
-                    lineSpacing = cell.lineSpacing ?: 1.3f,
-                    bold = cell.bold,
-                    markdown = markdown,
-                )
-                GridCellDef(columnSpan = 1, children = listOf(child))
+                when (cell) {
+                    is TextTableCell -> {
+                        val cellFont = cell.font.ifEmpty { font }
+                        val child = ParagraphNode(
+                            content = cell.content,
+                            fontSize = cell.fontSize,
+                            font = cellFont,
+                            color = cell.color,
+                            align = cell.align,
+                            lineSpacing = cell.lineSpacing ?: 1.3f,
+                            bold = cell.bold,
+                            markdown = markdown,
+                        )
+                        GridCellDef(columnSpan = 1, children = listOf(child))
+                    }
+                    is RichTableCell -> {
+                        GridCellDef(columnSpan = 1, children = cell.children)
+                    }
+                }
             }
             GridRowDef(gridCells, bg)
         }
@@ -71,7 +78,7 @@ class TableRowBuilder internal constructor() {
     fun cell(content: String, block: CellStyle.() -> Unit = {}) {
         val style = CellStyle().apply(block)
         cells.add(
-            TableCell(
+            TextTableCell(
                 content = content,
                 fontSize = style.fontSize,
                 font = style.font,
@@ -81,6 +88,12 @@ class TableRowBuilder internal constructor() {
                 lineSpacing = style.lineSpacing,
             )
         )
+    }
+
+    fun richCell(block: PageBuilder.() -> Unit) {
+        val builder = PageBuilder(0f)
+        builder.block()
+        cells.add(RichTableCell(builder.children))
     }
 }
 
@@ -93,7 +106,9 @@ class CellStyle {
     var lineSpacing: Float? = null
 }
 
-internal data class TableCell(
+internal sealed interface TableCell
+
+internal data class TextTableCell(
     val content: String,
     val fontSize: Float,
     val font: String,
@@ -101,6 +116,10 @@ internal data class TableCell(
     val align: TextAlign,
     val bold: Boolean = false,
     val lineSpacing: Float? = null,
-)
+) : TableCell
+
+internal data class RichTableCell(
+    val children: List<PdfView>,
+) : TableCell
 
 internal data class TableRow(val cells: List<TableCell>, val isHeader: Boolean)
