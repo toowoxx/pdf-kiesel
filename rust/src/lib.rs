@@ -80,15 +80,30 @@ pub unsafe extern "C" fn pdfgen_generate_tree(json: *const c_char) -> PdfGenResu
         Err(e) => return error_result(&format!("Failed to parse tree JSON: {e}")),
     };
 
-    let bytes = render::render_tree(&doc);
-    let len = bytes.len();
-    let boxed = bytes.into_boxed_slice();
-    let ptr = Box::into_raw(boxed) as *mut u8;
+    // Catch panics so they don't unwind across the FFI boundary (which aborts).
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render::render_tree(&doc)
+    }));
 
-    PdfGenResult {
-        data: ptr,
-        len,
-        error: std::ptr::null_mut(),
+    match result {
+        Ok(bytes) => {
+            let len = bytes.len();
+            let boxed = bytes.into_boxed_slice();
+            let ptr = Box::into_raw(boxed) as *mut u8;
+            PdfGenResult {
+                data: ptr,
+                len,
+                error: std::ptr::null_mut(),
+            }
+        }
+        Err(panic) => {
+            let msg = panic
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            error_result(&format!("PDF rendering panic: {msg}"))
+        }
     }
 }
 
