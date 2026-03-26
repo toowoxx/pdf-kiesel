@@ -205,6 +205,14 @@ internal constructor(
     fun canvas(height: Float, block: CanvasScope.() -> Unit) {
         children.add(CanvasNode(height, block, availableWidth))
     }
+
+    fun overlay(block: CanvasScope.() -> Unit) {
+        val scope = CanvasScope(0f, 0f, availableWidth, 0f, yDown = true)
+        scope.block()
+        for (element in scope.elements) {
+            children.add(OverlayNode(element))
+        }
+    }
 }
 
 @PdfDslMarker
