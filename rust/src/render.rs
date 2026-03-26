@@ -34,7 +34,7 @@ pub fn render(doc: &PdfDocument) -> Vec<u8> {
     let fallback = fonts.values().next().cloned();
 
     for page in &doc.pages {
-        let settings = PageSettings::from_wh(page.width, page.height).unwrap();
+        let settings = page_settings_or_default(page.width, page.height);
         let mut pg = document.start_page_with(settings);
         let mut surface = pg.surface();
 
@@ -296,7 +296,13 @@ pub fn render(doc: &PdfDocument) -> Vec<u8> {
         pg.finish();
     }
 
-    document.finish().unwrap()
+    document.finish().unwrap_or_default()
+}
+
+/// Create page settings, falling back to A4 if the dimensions are invalid (zero, negative, NaN).
+fn page_settings_or_default(width: f32, height: f32) -> PageSettings {
+    PageSettings::from_wh(width, height)
+        .unwrap_or_else(|| PageSettings::from_wh(595.0, 842.0).unwrap())
 }
 
 fn paint_from(color: &PdfColor) -> krilla::paint::Paint {
@@ -953,7 +959,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
 
         // Render each output page
         for page_result in &output_pages {
-            let settings = PageSettings::from_wh(tree_page.width, tree_page.height).unwrap();
+            let settings = page_settings_or_default(tree_page.width, tree_page.height);
             let mut pg = krilla_doc.start_page_with(settings);
             let mut surface = pg.surface();
 
@@ -998,7 +1004,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
         }
     }
 
-    krilla_doc.finish().unwrap()
+    krilla_doc.finish().unwrap_or_default()
 }
 
 /// Render a parley Layout to a krilla surface using draw_glyphs().
@@ -1031,7 +1037,7 @@ fn render_parley_layout(
 ) {
     // Cache key: (blob_id, normalized_coords) — different variation instances
     // of the same variable font get separate krilla Font objects.
-    let mut font_cache: HashMap<(u64, Vec<i16>), Font> = HashMap::new();
+    let mut font_cache: HashMap<(u64, Vec<i16>), Option<Font>> = HashMap::new();
 
     for line in layout.lines() {
         let baseline = line.metrics().baseline;
@@ -1051,14 +1057,15 @@ fn render_parley_layout(
                 .entry(cache_key)
                 .or_insert_with(|| {
                     if norm.is_empty() {
-                        Font::new(arc_data.clone().into(), font_data.index).unwrap()
+                        Font::new(arc_data.clone().into(), font_data.index)
                     } else {
                         let raw: &[u8] = (*arc_data).as_ref();
                         let user_coords = denormalize_coords(raw, font_data.index, &norm);
                         Font::new_variable(arc_data.clone().into(), font_data.index, &user_coords)
-                            .unwrap_or_else(|| Font::new(arc_data.clone().into(), font_data.index).unwrap())
+                            .or_else(|| Font::new(arc_data.clone().into(), font_data.index))
                     }
                 });
+            let Some(krilla_font) = krilla_font else { continue };
 
             let font_size = run.font_size();
             let mut cur_style: Option<u16> = None;

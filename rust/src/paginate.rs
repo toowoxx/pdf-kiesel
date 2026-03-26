@@ -26,7 +26,8 @@ pub fn paginate(
         return vec![LayoutResult { items: vec![], height: 0.0 }];
     }
 
-    let total_height = measured.last().unwrap().top_offset + measured.last().unwrap().height;
+    let last = measured.last().expect("measured is non-empty (checked above)");
+    let total_height = last.top_offset + last.height;
     if total_height <= page_content_height + 0.1 {
         // Everything fits on one page — layout once at start_y
         let result = engine.layout_nodes(children, x, start_y, max_width);
