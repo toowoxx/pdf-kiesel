@@ -218,7 +218,7 @@ internal data class PaddedNode(
 
 internal data class GridCellDef(val columnSpan: Int, val children: List<PdfView>)
 
-internal data class GridRowDef(val cells: List<GridCellDef>, val background: PdfColor?)
+internal data class GridRowDef(val cells: List<GridCellDef>, val background: PdfColor?, val skipTopBorder: Boolean = false)
 
 internal class GridNode(
     private val rows: List<GridRowDef>,
@@ -240,6 +240,7 @@ internal class GridNode(
         rows = rows.map { row ->
             TreeGridRow(
                 background = row.background,
+                skipTopBorder = row.skipTopBorder,
                 cells = row.cells.map { cell ->
                     TreeGridCell(
                         span = cell.columnSpan,

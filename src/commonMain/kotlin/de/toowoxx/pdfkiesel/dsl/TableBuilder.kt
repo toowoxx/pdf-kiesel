@@ -22,12 +22,12 @@ internal constructor(
         columnWidths = widths.toList()
     }
 
-    fun headerRow(block: TableRowBuilder.() -> Unit) = row(isHeader = true, block)
+    fun headerRow(block: TableRowBuilder.() -> Unit) = row(isHeader = true, block = block)
 
-    fun row(isHeader: Boolean = false, block: TableRowBuilder.() -> Unit) {
+    fun row(isHeader: Boolean = false, skipTopBorder: Boolean = false, block: TableRowBuilder.() -> Unit) {
         val builder = TableRowBuilder()
         builder.block()
-        rows.add(TableRow(builder.cells, isHeader))
+        rows.add(TableRow(builder.cells, isHeader, skipTopBorder))
     }
 
     internal fun buildNode(): DocumentNode {
@@ -56,14 +56,14 @@ internal constructor(
                             bold = cell.bold,
                             markdown = markdown,
                         )
-                        GridCellDef(columnSpan = 1, children = listOf(child))
+                        GridCellDef(columnSpan = cell.columnSpan, children = listOf(child))
                     }
                     is RichTableCell -> {
-                        GridCellDef(columnSpan = 1, children = cell.children)
+                        GridCellDef(columnSpan = cell.columnSpan, children = cell.children)
                     }
                 }
             }
-            GridRowDef(gridCells, bg)
+            GridRowDef(gridCells, bg, skipTopBorder = row.skipTopBorder)
         }
 
         val grid = GridNode(gridRows, columnDefs, Padding(cellPadding), borderColor)
@@ -90,10 +90,10 @@ class TableRowBuilder internal constructor() {
         )
     }
 
-    fun richCell(block: PageBuilder.() -> Unit) {
+    fun richCell(span: Int = 1, block: PageBuilder.() -> Unit) {
         val builder = PageBuilder(0f)
         builder.block()
-        cells.add(RichTableCell(builder.children))
+        cells.add(RichTableCell(builder.children, columnSpan = span))
     }
 }
 
@@ -106,7 +106,9 @@ class CellStyle {
     var lineSpacing: Float? = null
 }
 
-internal sealed interface TableCell
+internal sealed interface TableCell {
+    val columnSpan: Int
+}
 
 internal data class TextTableCell(
     val content: String,
@@ -116,10 +118,12 @@ internal data class TextTableCell(
     val align: TextAlign,
     val bold: Boolean = false,
     val lineSpacing: Float? = null,
+    override val columnSpan: Int = 1,
 ) : TableCell
 
 internal data class RichTableCell(
     val children: List<PdfView>,
+    override val columnSpan: Int = 1,
 ) : TableCell
 
-internal data class TableRow(val cells: List<TableCell>, val isHeader: Boolean)
+internal data class TableRow(val cells: List<TableCell>, val isHeader: Boolean, val skipTopBorder: Boolean = false)

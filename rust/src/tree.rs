@@ -170,6 +170,8 @@ pub struct GridRow {
     #[serde(default)]
     pub background: Option<PdfColor>,
     #[serde(default)]
+    pub skip_top_border: bool,
+    #[serde(default)]
     pub cells: Vec<GridCell>,
 }
 

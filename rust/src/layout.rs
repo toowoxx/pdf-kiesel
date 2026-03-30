@@ -257,6 +257,7 @@ impl<'a> LayoutEngine<'a> {
             let mut italic_ranges: Vec<std::ops::Range<usize>> = Vec::new();
             let mut bold_start: Option<usize> = None;
             let mut italic_start: Option<usize> = None;
+            let mut list_depth: usize = 0;
 
             for event in Parser::new(content) {
                 match event {
@@ -272,12 +273,30 @@ impl<'a> LayoutEngine<'a> {
                             if s < plain.len() { italic_ranges.push(s..plain.len()); }
                         }
                     }
+                    Event::Start(Tag::List(_)) => list_depth += 1,
+                    Event::End(TagEnd::List(_)) => {
+                        list_depth = list_depth.saturating_sub(1);
+                    }
+                    Event::Start(Tag::Item) => {
+                        if !plain.is_empty() && !plain.ends_with('\n') {
+                            plain.push('\n');
+                        }
+                        for _ in 1..list_depth { plain.push_str("  "); }
+                        plain.push_str("• ");
+                    }
+                    Event::End(TagEnd::Item) | Event::End(TagEnd::Paragraph) | Event::End(TagEnd::Heading(_)) => {
+                        if !plain.is_empty() && !plain.ends_with('\n') {
+                            plain.push('\n');
+                        }
+                    }
                     Event::Text(t) | Event::Code(t) => plain.push_str(&t),
                     Event::SoftBreak => plain.push(' '),
                     Event::HardBreak => plain.push('\n'),
                     _ => {}
                 }
             }
+            // Trim trailing newline
+            if plain.ends_with('\n') { plain.pop(); }
             (plain, bold_ranges, italic_ranges)
         } else {
             (content.to_string(), vec![], vec![])
@@ -682,12 +701,14 @@ impl<'a> LayoutEngine<'a> {
         let mut items = Vec::new();
         let mut cur_y = y;
 
-        for row in rows {
+        for (row_idx, row) in rows.iter().enumerate() {
             // Layout all cells in this row
             let mut cell_results: Vec<LayoutResult> = Vec::new();
             let mut col_idx = 0;
             let mut cur_x = x;
             let mut max_row_height = 0.0f32;
+
+            let row_top_pad = if row.skip_top_border { 0.0 } else { cell_padding.top };
 
             for cell in &row.cells {
                 let cell_width: f32 = (col_idx..col_idx + cell.span as usize)
@@ -695,10 +716,10 @@ impl<'a> LayoutEngine<'a> {
                     .sum();
                 let inner_w = (cell_width - cell_padding.left - cell_padding.right).max(0.0);
                 let inner_x = cur_x + cell_padding.left;
-                let inner_y = cur_y + cell_padding.top;
+                let inner_y = cur_y + row_top_pad;
 
                 let result = self.layout_nodes(&cell.children, inner_x, inner_y, inner_w);
-                let cell_h = cell_padding.top + result.height + cell_padding.bottom;
+                let cell_h = row_top_pad + result.height + cell_padding.bottom;
 
                 max_row_height = max_row_height.max(cell_h);
                 cell_results.push(result);
@@ -718,13 +739,16 @@ impl<'a> LayoutEngine<'a> {
                 }));
             }
 
-            // Draw row bottom border
+            // Draw row bottom border (skip if next row has skip_top_border)
             if let Some(bc) = border_color {
-                items.push(PositionedItem::Element(PdfElement::Line {
-                    x1: x, y1: cur_y + max_row_height, x2: x + max_width, y2: cur_y + max_row_height,
-                    color: bc.clone(), stroke_width: 1.0,
-                    ripple: 0.0, thickness_ripple: 0.0,
-                }));
+                let next_skips = rows.get(row_idx + 1).map_or(false, |r| r.skip_top_border);
+                if !next_skips {
+                    items.push(PositionedItem::Element(PdfElement::Line {
+                        x1: x, y1: cur_y + max_row_height, x2: x + max_width, y2: cur_y + max_row_height,
+                        color: bc.clone(), stroke_width: 1.0,
+                        ripple: 0.0, thickness_ripple: 0.0,
+                    }));
+                }
             }
 
             // Add cell content

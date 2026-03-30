@@ -76,6 +76,7 @@ data class TreeRowCell(
 @Serializable
 data class TreeGridRow(
     val background: PdfColor? = null,
+    val skipTopBorder: Boolean = false,
     val cells: List<TreeGridCell> = emptyList(),
 )
 
