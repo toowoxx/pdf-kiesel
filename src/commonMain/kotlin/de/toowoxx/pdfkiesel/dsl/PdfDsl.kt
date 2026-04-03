@@ -14,13 +14,15 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 @DslMarker annotation class PdfDslMarker
 
-fun pdfDocument(block: DocumentBuilder.() -> Unit): TreeDocument {
-    return DocumentBuilder().apply(block).build()
+inline fun pdfDocument(block: DocumentBuilder.() -> Unit): TreeDocument {
+    val builder = DocumentBuilder()
+    builder.block()
+    return builder.build()
 }
 
 @PdfDslMarker
 class DocumentBuilder {
-    private val pages = mutableListOf<TreePage>()
+    @PublishedApi internal val pages = mutableListOf<TreePage>()
     private val fonts = mutableMapOf<String, PdfFontDef>()
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -28,7 +30,7 @@ class DocumentBuilder {
         fonts[name] = PdfFontDef(data = Base64.encode(data))
     }
 
-    fun page(
+    inline fun page(
         width: Float = PageSize.A4_WIDTH,
         height: Float = PageSize.A4_HEIGHT,
         margin: Margin = Margin(),
@@ -45,12 +47,12 @@ class DocumentBuilder {
                 margin = TreeMargin(margin.top, margin.bottom, margin.left, margin.right),
                 background = background,
                 splitStrategy = TreeSplitStrategy.NONE,
-                content = scope.children.map { it.toNode() },
+                content = scope.buildContent(),
             )
         )
     }
 
-    fun pagedContent(
+    inline fun pagedContent(
         width: Float = PageSize.A4_WIDTH,
         height: Float = PageSize.A4_HEIGHT,
         margin: Margin = Margin(),
@@ -68,11 +70,12 @@ class DocumentBuilder {
                 margin = TreeMargin(margin.top, margin.bottom, margin.left, margin.right),
                 background = background,
                 splitStrategy = splitStrategy.toTreeSplitStrategy(),
-                content = scope.children.map { it.toNode() },
+                content = scope.buildContent(),
             )
         )
     }
 
+    @PublishedApi
     internal fun build(): TreeDocument = TreeDocument(fonts.toMap(), pages.toList())
 }
 

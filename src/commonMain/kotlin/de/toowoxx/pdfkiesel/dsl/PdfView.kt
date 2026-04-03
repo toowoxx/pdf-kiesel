@@ -296,6 +296,7 @@ internal fun VerticalAlignment.toTreeVerticalAlignment(): TreeVerticalAlignment 
     VerticalAlignment.Bottom -> TreeVerticalAlignment.Bottom
 }
 
+@PublishedApi
 internal fun PageSplitStrategy.toTreeSplitStrategy(): TreeSplitStrategy = when (this) {
     PageSplitStrategy.NONE -> TreeSplitStrategy.NONE
     PageSplitStrategy.SPLIT_NEAREST_VIEW -> TreeSplitStrategy.SPLIT_NEAREST_VIEW

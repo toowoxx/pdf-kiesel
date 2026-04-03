@@ -4,11 +4,15 @@ import de.toowoxx.pdfkiesel.model.PdfColor
 
 @PdfDslMarker
 class PageBuilder
+@PublishedApi
 internal constructor(
-    internal val availableWidth: Float,
+    @PublishedApi internal val availableWidth: Float,
     private val nonSplittable: Boolean = false,
 ) {
     internal val children = mutableListOf<PdfView>()
+
+    @PublishedApi
+    internal fun buildContent() = children.map { it.toNode() }
 
     val contentWidth: Float
         get() = availableWidth
