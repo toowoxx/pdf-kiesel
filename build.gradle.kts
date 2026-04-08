@@ -54,16 +54,27 @@ tasks.register<Exec>("buildRustJvm") {
     description = "Build Rust pdfgen library for JVM (host platform)"
     group = "rust"
     val buildScript = file("rust/build-jvm.sh")
+    val outputDir = file("src/jvmMain/resources/native/linux-x86_64")
     val useNix = providers.exec {
         commandLine("which", "nix-shell")
         isIgnoreExitValue = true
     }.result.get().exitValue == 0
+
+    inputs.dir(file("rust/src"))
+    inputs.file(file("rust/Cargo.toml"))
+    inputs.file(file("rust/Cargo.lock"))
+    inputs.file(buildScript)
+    outputs.file(outputDir.resolve("libpdfgen.so"))
 
     if (useNix) {
         commandLine("nix-shell", "-p", "gcc", "--run", "bash ${buildScript.absolutePath}")
     } else {
         commandLine("bash", buildScript.absolutePath)
     }
+}
+
+tasks.named("jvmProcessResources") {
+    dependsOn("buildRustJvm")
 }
 
 if (providers.environmentVariable("ANDROID_HOME").isPresent) {
