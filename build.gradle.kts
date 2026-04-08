@@ -74,7 +74,10 @@ tasks.register<Exec>("buildRustJvm") {
 }
 
 tasks.named("jvmProcessResources") {
-    dependsOn("buildRustJvm")
+    val nativeLib = file("src/jvmMain/resources/native/linux-x86_64/libpdfgen.so")
+    if (!nativeLib.exists()) {
+        dependsOn("buildRustJvm")
+    }
 }
 
 if (providers.environmentVariable("ANDROID_HOME").isPresent) {
