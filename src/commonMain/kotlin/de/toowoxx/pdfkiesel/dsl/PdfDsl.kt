@@ -24,6 +24,11 @@ inline fun pdfDocument(block: DocumentBuilder.() -> Unit): TreeDocument {
 class DocumentBuilder {
     @PublishedApi internal val pages = mutableListOf<TreePage>()
     private val fonts = mutableMapOf<String, PdfFontDef>()
+    @PublishedApi internal var defaultFont: String = ""
+
+    fun defaultFont(name: String) {
+        defaultFont = name
+    }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun registerFont(name: String, data: ByteArray) {
@@ -38,7 +43,7 @@ class DocumentBuilder {
         block: PageBuilder.() -> Unit,
     ) {
         val contentWidth = width - margin.left - margin.right
-        val scope = PageBuilder(contentWidth)
+        val scope = PageBuilder(contentWidth, defaultFont = defaultFont)
         scope.block()
         pages.add(
             TreePage(
@@ -61,7 +66,7 @@ class DocumentBuilder {
         block: PageBuilder.() -> Unit,
     ) {
         val contentWidth = width - margin.left - margin.right
-        val scope = PageBuilder(contentWidth)
+        val scope = PageBuilder(contentWidth, defaultFont = defaultFont)
         scope.block()
         pages.add(
             TreePage(
@@ -163,6 +168,7 @@ internal constructor(
     val width: Float,
     val height: Float,
     internal val yDown: Boolean = false,
+    private val defaultFont: String = "",
 ) {
     val cx: Float
         get() = x + width / 2f
@@ -223,7 +229,8 @@ internal constructor(
 
     fun text(content: String, x: Float, y: Float, block: TextStyle.() -> Unit = {}) {
         val s = TextStyle().apply { align = TextAlign.CENTER }.apply(block)
-        val w = TextMeasure.measureWidth(content, s.font, s.fontSize)
+        val resolvedFont = s.font.ifEmpty { defaultFont }
+        val w = TextMeasure.measureWidth(content, resolvedFont, s.fontSize)
         val tx =
             when (s.align) {
                 TextAlign.LEFT -> x
@@ -231,7 +238,7 @@ internal constructor(
                 TextAlign.RIGHT -> x - w
             }
         elements.add(
-            PdfElement.Text(content, tx, y + s.fontSize * 0.3f, s.fontSize, s.font, s.color)
+            PdfElement.Text(content, tx, y + s.fontSize * 0.3f, s.fontSize, resolvedFont, s.color)
         )
     }
 

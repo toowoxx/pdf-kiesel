@@ -7,6 +7,7 @@ import de.toowoxx.pdfkiesel.model.PdfColor
 class TableBuilder
 internal constructor(
     private val tableWidth: Float,
+    private val defaultFont: String = "",
 ) {
     private val rows = mutableListOf<TableRow>()
     private var columnWidths: List<Float>? = null
@@ -25,7 +26,7 @@ internal constructor(
     fun headerRow(block: TableRowBuilder.() -> Unit) = row(isHeader = true, block = block)
 
     fun row(isHeader: Boolean = false, skipTopBorder: Boolean = false, block: TableRowBuilder.() -> Unit) {
-        val builder = TableRowBuilder()
+        val builder = TableRowBuilder(defaultFont)
         builder.block()
         rows.add(TableRow(builder.cells, isHeader, skipTopBorder))
     }
@@ -72,7 +73,7 @@ internal constructor(
 }
 
 @PdfDslMarker
-class TableRowBuilder internal constructor() {
+class TableRowBuilder internal constructor(private val defaultFont: String = "") {
     internal val cells = mutableListOf<TableCell>()
 
     fun cell(content: String, block: CellStyle.() -> Unit = {}) {
@@ -91,7 +92,7 @@ class TableRowBuilder internal constructor() {
     }
 
     fun richCell(span: Int = 1, block: PageBuilder.() -> Unit) {
-        val builder = PageBuilder(0f)
+        val builder = PageBuilder(0f, defaultFont = defaultFont)
         builder.block()
         cells.add(RichTableCell(builder.children, columnSpan = span))
     }
