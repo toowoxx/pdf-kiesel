@@ -1,4 +1,6 @@
-val androidSdkAvailable = providers.environmentVariable("ANDROID_HOME").isPresent
+val androidSdkAvailable = providers.environmentVariable("ANDROID_HOME").isPresent ||
+    providers.environmentVariable("ANDROID_SDK_ROOT").isPresent ||
+    rootDir.resolve("local.properties").let { it.exists() && it.readText().contains(Regex("^\\s*sdk\\.dir\\s*=", RegexOption.MULTILINE)) }
 
 if (androidSdkAvailable) {
     apply(plugin = "com.android.kotlin.multiplatform.library")
