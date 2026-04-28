@@ -8,6 +8,7 @@
 # Rust build artifacts (use buildRust / buildRustIos to build)
 rust/target/
 rust/.cargo/
+rust/about.hbs
 
 # Compiled native libraries
 src/androidMain/jniLibs/
