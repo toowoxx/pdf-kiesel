@@ -48,6 +48,33 @@ kotlin {
     }
 }
 
+// Rust license generation
+
+tasks.register<Exec>("generateRustLicenses") {
+    description = "Generate license JSON for Rust dependencies via cargo-about"
+    group = "rust"
+
+    val rustDir = file("rust")
+    val outputFile = file("build/rust-licenses.json")
+    val useNix = providers.exec {
+        commandLine("which", "nix")
+        isIgnoreExitValue = true
+    }.result.get().exitValue == 0
+
+    inputs.file(rustDir.resolve("Cargo.toml"))
+    inputs.file(rustDir.resolve("Cargo.lock"))
+    inputs.file(rustDir.resolve("about.toml"))
+    outputs.file(outputFile)
+
+    workingDir = rustDir
+
+    if (useNix) {
+        commandLine("nix", "shell", "nixpkgs#cargo-about", "-c", "cargo-about", "generate", "--format", "json", "-o", outputFile.absolutePath)
+    } else {
+        commandLine("cargo-about", "generate", "--format", "json", "-o", outputFile.absolutePath)
+    }
+}
+
 // Rust build tasks
 
 tasks.register<Exec>("buildRustJvm") {
