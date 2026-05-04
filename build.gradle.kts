@@ -56,10 +56,18 @@ tasks.register<Exec>("generateRustLicenses") {
 
     val rustDir = file("rust")
     val outputFile = file("build/rust-licenses.json")
-    val useNix = providers.exec {
-        commandLine("which", "nix")
-        isIgnoreExitValue = true
-    }.result.get().exitValue == 0
+    // Resolve `nix` to an absolute path at config time. Gradle daemons started
+    // outside our wrapper shell do not see the user's Nix profile on PATH, so
+    // looking up `nix` via PATH at task-execution time fails. The binary lives
+    // at a stable location regardless.
+    val nixCommand: String? = sequenceOf(
+        "/nix/var/nix/profiles/default/bin/nix",
+        "${System.getProperty("user.home")}/.nix-profile/bin/nix",
+        "/run/current-system/sw/bin/nix",
+    ).map { File(it) }.firstOrNull { it.canExecute() }?.absolutePath
+        ?: System.getenv("PATH")?.split(File.pathSeparator)
+            ?.asSequence()?.map { File(it, "nix") }
+            ?.firstOrNull { it.canExecute() }?.absolutePath
 
     inputs.file(rustDir.resolve("Cargo.toml"))
     inputs.file(rustDir.resolve("Cargo.lock"))
@@ -68,8 +76,10 @@ tasks.register<Exec>("generateRustLicenses") {
 
     workingDir = rustDir
 
-    if (useNix) {
-        commandLine("nix", "shell", "nixpkgs#cargo-about", "-c", "cargo-about", "generate", "--format", "json", "-o", outputFile.absolutePath)
+    if (nixCommand != null) {
+        // cargo-about invokes `cargo metadata` internally, so cargo itself
+        // must be on PATH inside the spawned shell.
+        commandLine(nixCommand, "shell", "nixpkgs#cargo-about", "nixpkgs#cargo", "-c", "cargo-about", "generate", "--format", "json", "-o", outputFile.absolutePath)
     } else {
         commandLine("cargo-about", "generate", "--format", "json", "-o", outputFile.absolutePath)
     }
