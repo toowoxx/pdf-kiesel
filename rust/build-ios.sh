@@ -13,23 +13,36 @@ OUTPUT_DIR="$MODULE_DIR/iosFrameworks/pdfgen-ios"
 # Ensure rustup's cargo/rustc take precedence
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# If rustup isn't available, re-exec through nix-shell
-if ! command -v rustup &>/dev/null; then
-    # Try common Nix paths since Xcode strips PATH
-    for nixbin in /nix/var/nix/profiles/default/bin /run/current-system/sw/bin "$HOME/.nix-profile/bin"; do
-        if [ -x "$nixbin/nix-shell" ]; then
-            echo "rustup not found, re-executing via $nixbin/nix-shell..."
-            exec "$nixbin/nix-shell" -p rustup --run "bash '$0'"
-        fi
-    done
-    echo "ERROR: rustup not found and nix-shell not available." >&2
-    echo "Install rustup (https://rustup.rs) or ensure Nix is installed." >&2
-    exit 1
+# Toolchain + iOS targets:
+#   - Inside the nix dev shell (default path): rust-overlay provides cargo/rustc
+#     with iOS targets bundled — nothing to do.
+#   - Outside nix (fallback path): the developer is expected to have stock
+#     rustup installed; put rustup's cargo on PATH and ensure targets exist.
+#   - If neither cargo nor rustup is present, re-exec through `nix develop`
+#     against the flake (Xcode strips PATH, so we look up nix in well-known
+#     locations).
+if ! command -v cargo &>/dev/null; then
+    if command -v rustup &>/dev/null; then
+        export PATH="$HOME/.cargo/bin:$PATH"
+    else
+        for nixbin in /nix/var/nix/profiles/default/bin /run/current-system/sw/bin "$HOME/.nix-profile/bin"; do
+            if [ -x "$nixbin/nix" ]; then
+                echo "cargo not found, re-executing via $nixbin/nix develop..."
+                exec "$nixbin/nix" develop --command bash "$0"
+            fi
+        done
+        echo "ERROR: cargo not found and neither rustup nor nix is available." >&2
+        echo "Either install rustup (https://rustup.rs) or run from inside the nix dev shell." >&2
+        exit 1
+    fi
 fi
 
-# Install toolchain + targets if needed
-rustup show active-toolchain >/dev/null 2>&1 || rustup default stable
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios 2>/dev/null || true
+# If rustup is available (fallback path), make sure the targets are installed.
+# Inside the nix shell rustup is absent and the targets are bundled by rust-overlay.
+if command -v rustup >/dev/null 2>&1; then
+    rustup show active-toolchain >/dev/null 2>&1 || rustup default stable
+    rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios 2>/dev/null || true
+fi
 
 cd "$SCRIPT_DIR"
 

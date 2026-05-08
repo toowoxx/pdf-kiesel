@@ -17,12 +17,17 @@ NDK_VERSION=$(ls "$NDK_DIR" | sort -V | tail -1)
 export ANDROID_NDK_HOME="$NDK_DIR/$NDK_VERSION"
 echo "Using NDK: $ANDROID_NDK_HOME"
 
-# Ensure rustup's cargo/rustc take precedence over Nix's
-export PATH="$HOME/.cargo/bin:$PATH"
-
-# Install toolchain + targets if needed
-rustup show active-toolchain >/dev/null 2>&1 || rustup default stable
-rustup target add aarch64-linux-android x86_64-linux-android 2>/dev/null || true
+# Toolchain + Android targets:
+#   - Inside the nix shell (default path): rust-overlay provides rustc/cargo
+#     with both Android targets bundled. Nothing to do here.
+#   - Outside nix (fallback path): the developer is expected to have stock
+#     rustup installed. Put rustup's cargo/rustc on PATH and ensure the
+#     targets are available.
+if command -v rustup >/dev/null 2>&1; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup show active-toolchain >/dev/null 2>&1 || rustup default stable
+    rustup target add aarch64-linux-android x86_64-linux-android 2>/dev/null || true
+fi
 
 # Install cargo-ndk if not available
 command -v cargo-ndk >/dev/null 2>&1 || cargo install cargo-ndk
