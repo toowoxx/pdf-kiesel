@@ -143,18 +143,48 @@ if (System.getProperty("os.name").lowercase().contains("mac")) {
     tasks.register<Exec>("buildRustIos") {
         description = "Build Rust pdfgen library for iOS"
         group = "rust"
-        val buildScript = file("rust/build-ios.sh")
+        val rustDir = file("rust")
+        val buildScript = rustDir.resolve("build-ios.sh")
+        val flakeNix = rustDir.resolve("flake.nix")
         val iosLibDir = rootProject.projectDir.resolve("pdf-kiesel/iosFrameworks/pdfgen-ios")
 
-        inputs.dir(file("rust/src"))
-        inputs.file(file("rust/Cargo.toml"))
-        inputs.file(file("rust/Cargo.lock"))
+        inputs.dir(rustDir.resolve("src"))
+        inputs.file(rustDir.resolve("Cargo.toml"))
+        inputs.file(rustDir.resolve("Cargo.lock"))
         inputs.file(buildScript)
         outputs.file(iosLibDir.resolve("device/libpdfgen.a"))
         outputs.file(iosLibDir.resolve("sim/libpdfgen.a"))
         outputs.file(iosLibDir.resolve("sim-x86_64/libpdfgen.a"))
 
-        commandLine("bash", buildScript.absolutePath)
+        workingDir = rustDir
+
+        // The bundled rust toolchain (with iOS cross targets) lives in
+        // rust/flake.nix and is entered via `nix develop`. Resolve `nix` to
+        // an absolute path (Xcode and the Gradle daemon may not see the Nix
+        // profile on PATH) and use the `path:` URL so flake evaluation
+        // doesn't require git. Falls back to running build-ios.sh directly
+        // when nix isn't available — the script then expects rustup.
+        val nixCommand: String? = sequenceOf(
+            "/nix/var/nix/profiles/default/bin/nix",
+            "${System.getProperty("user.home")}/.nix-profile/bin/nix",
+            "/run/current-system/sw/bin/nix",
+        ).map { File(it) }.firstOrNull { it.canExecute() }?.absolutePath
+            ?: System.getenv("PATH")?.split(File.pathSeparator)
+                ?.asSequence()?.map { File(it, "nix") }
+                ?.firstOrNull { it.canExecute() }?.absolutePath
+
+        if (nixCommand != null && flakeNix.exists()) {
+            commandLine(
+                nixCommand,
+                "develop",
+                "path:${rustDir.absolutePath}",
+                "--command",
+                "bash",
+                buildScript.absolutePath,
+            )
+        } else {
+            commandLine("bash", buildScript.absolutePath)
+        }
     }
 
     val buildRustIosTask = tasks.named("buildRustIos")
