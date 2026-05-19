@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -145,29 +143,4 @@ pub struct PdfPoint {
 
 fn default_image_format() -> String {
     "png".to_string()
-}
-
-#[derive(Deserialize)]
-pub struct PdfPage {
-    #[serde(default = "default_page_width")]
-    pub width: f32,
-    #[serde(default = "default_page_height")]
-    pub height: f32,
-    #[serde(default)]
-    pub elements: Vec<PdfElement>,
-}
-
-fn default_page_width() -> f32 {
-    595.28
-}
-fn default_page_height() -> f32 {
-    841.89
-}
-
-#[derive(Deserialize)]
-pub struct PdfDocument {
-    #[serde(default)]
-    pub pages: Vec<PdfPage>,
-    #[serde(default)]
-    pub fonts: HashMap<String, PdfFontDef>,
 }
