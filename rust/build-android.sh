@@ -7,14 +7,27 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="$MODULE_DIR/src/androidMain/jniLibs"
 
-# Find the latest NDK
-NDK_DIR="$HOME/Android/Sdk/ndk"
-if [ ! -d "$NDK_DIR" ]; then
-    echo "ERROR: Android NDK not found at $NDK_DIR"
-    exit 1
+# Resolve the NDK: explicit ANDROID_NDK_HOME → the containing workspace's
+# project-local SDK (../.android/sdk/ndk) → global ~/Android/Sdk/ndk.
+# The local-SDK probe lets a sandbox without a global SDK build; on a
+# standalone checkout the probe simply misses and the global fallback applies.
+# Each candidate dir holds versioned subdirs; the newest wins.
+if [ -z "${ANDROID_NDK_HOME:-}" ]; then
+    NDK_DIR=""
+    for candidate in "$MODULE_DIR/../.android/sdk/ndk" "$HOME/Android/Sdk/ndk"; do
+        if [ -d "$candidate" ]; then
+            NDK_DIR="$candidate"
+            break
+        fi
+    done
+    if [ -z "$NDK_DIR" ]; then
+        echo "ERROR: Android NDK not found (set ANDROID_NDK_HOME, or provide" \
+             "../.android/sdk/ndk or ~/Android/Sdk/ndk)"
+        exit 1
+    fi
+    NDK_VERSION=$(ls "$NDK_DIR" | sort -V | tail -1)
+    export ANDROID_NDK_HOME="$NDK_DIR/$NDK_VERSION"
 fi
-NDK_VERSION=$(ls "$NDK_DIR" | sort -V | tail -1)
-export ANDROID_NDK_HOME="$NDK_DIR/$NDK_VERSION"
 echo "Using NDK: $ANDROID_NDK_HOME"
 
 # Toolchain + Android targets:
