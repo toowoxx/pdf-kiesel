@@ -20,6 +20,10 @@ kotlin {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
     }
 
+    // The iOS targets exist on every host, so a consumer's iOS configurations resolve their
+    // dependency on pdf-kiesel on Linux as well, and a build that locks its dependencies can lock
+    // them there. Only the pdfgen cinterop and the Rust iOS build need a Mac.
+    val iosTargets = listOf(iosX64(), iosArm64(), iosSimulatorArm64())
     if (System.getProperty("os.name").lowercase().contains("mac")) {
         val pdfgenLibDir = rootProject.projectDir.resolve("pdf-kiesel/iosFrameworks/pdfgen-ios")
         val pdfgenLibPath = mapOf(
@@ -28,7 +32,7 @@ kotlin {
             "iosX64" to pdfgenLibDir.resolve("sim-x86_64"),
         )
 
-        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { iosTarget ->
+        iosTargets.forEach { iosTarget ->
             iosTarget.compilations["main"].cinterops {
                 create("pdfgen") {
                     defFile(project.file("src/nativeInterop/cinterop/pdfgen.def"))
