@@ -229,8 +229,9 @@ The Kotlin DSL builds a document model that is serialized to JSON and passed to 
 The Rust native library must be built before the Kotlin code can run:
 
 ```bash
-# Android (requires cargo-ndk and Android NDK)
-cd rust && bash build-android.sh
+# Android (requires rustup and the Android NDK; the script installs the Rust toolchain of
+# rust-toolchain.toml and cargo-ndk at a locked version)
+cd rust && ANDROID_NDK_HOME=<ndk folder> PDFGEN_OUTPUT_DIR=<jniLibs folder> bash build-android.sh
 
 # iOS (requires macOS with Xcode)
 cd rust && bash build-ios.sh
@@ -239,7 +240,7 @@ cd rust && bash build-ios.sh
 Or via Gradle tasks:
 
 ```bash
-./gradlew :pdf-kiesel:buildRust       # Android
+./gradlew :pdf-kiesel:buildRust       # Android, cached by Gradle (finds the NDK itself)
 ./gradlew :pdf-kiesel:buildRustIos    # iOS (macOS only)
 ```
 
