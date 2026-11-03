@@ -10,6 +10,8 @@ plugins {
 group = "de.toowoxx.pdfkiesel"
 version = "0.1.0"
 
+val isMacHost = System.getProperty("os.name").lowercase().contains("mac")
+
 repositories {
     mavenCentral()
     google()
@@ -24,7 +26,7 @@ kotlin {
     // dependency on pdf-kiesel on Linux as well, and a build that locks its dependencies can lock
     // them there. Only the pdfgen cinterop and the Rust iOS build need a Mac.
     val iosTargets = listOf(iosX64(), iosArm64(), iosSimulatorArm64())
-    if (System.getProperty("os.name").lowercase().contains("mac")) {
+    if (isMacHost) {
         val pdfgenLibDir = rootProject.projectDir.resolve("pdf-kiesel/iosFrameworks/pdfgen-ios")
         val pdfgenLibPath = mapOf(
             "iosArm64" to pdfgenLibDir.resolve("device"),
@@ -41,6 +43,9 @@ kotlin {
                 }
             }
         }
+    } else {
+        // The iOS sources call the pdfgen cinterop, which exists on a Mac only, so their metadata compiles there.
+        tasks.matching { it.name == "compileIosMainKotlinMetadata" }.configureEach { enabled = false }
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class) applyDefaultHierarchyTemplate()
@@ -213,7 +218,7 @@ if (androidSdkAvailable) {
     }
 }
 
-if (System.getProperty("os.name").lowercase().contains("mac")) {
+if (isMacHost) {
     tasks.register<Exec>("buildRustIos") {
         description = "Build Rust pdfgen library for iOS"
         group = "rust"
