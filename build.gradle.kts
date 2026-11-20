@@ -205,10 +205,13 @@ if (androidSdkAvailable) {
         outputs.dir(outputDir)
         outputs.cacheIf("the declared inputs fix the libraries") { true }
 
+        // Gradle keys the cache on the arguments of an Exec task, so the script is named relative to its folder:
+        // an absolute path would give every checkout its own key.
+        workingDir = rustDir
         if (useNix) {
-            commandLine("nix-shell", "-p", "rustup", "--run", "bash ${buildScript.absolutePath}")
+            commandLine("nix-shell", "-p", "rustup", "--run", "bash ${buildScript.name}")
         } else {
-            commandLine("bash", buildScript.absolutePath)
+            commandLine("bash", buildScript.name)
         }
     }
 
