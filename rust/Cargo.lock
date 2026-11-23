@@ -614,6 +614,7 @@ dependencies = [
  "serde_json",
  "skrifa",
  "usvg",
+ "write-fonts",
 ]
 
 [[package]]

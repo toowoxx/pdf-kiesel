@@ -55,6 +55,7 @@ sealed interface PdfElement {
         val fontSize: Float = 12f,
         val font: String = "",
         val color: PdfColor = PdfColor.BLACK,
+        val weight: FontWeight = FontWeight.Normal,
     ) : PdfElement
 
     @Serializable

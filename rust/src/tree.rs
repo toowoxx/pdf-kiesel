@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-use crate::model::{PdfColor, PdfElement, PdfFontDef};
+use crate::model::{FontWeight, PdfColor, PdfElement, PdfFontDef};
 
 // ── Primitives ──────────────────────────────────────────────────────────────
 
@@ -205,8 +205,7 @@ pub enum DocumentNode {
         color: PdfColor,
         #[serde(default)]
         align: TextAlign,
-        #[serde(default)]
-        bold: bool,
+        weight: FontWeight,
         #[serde(default)]
         italic: bool,
         #[serde(default = "default_line_spacing")]
@@ -226,8 +225,7 @@ pub enum DocumentNode {
         align: TextAlign,
         #[serde(default = "default_line_spacing")]
         line_spacing: f32,
-        #[serde(default)]
-        bold: bool,
+        weight: FontWeight,
         #[serde(default)]
         markdown: bool,
     },
@@ -455,4 +453,58 @@ pub struct TreeDocument {
     pub fonts: HashMap<String, PdfFontDef>,
     #[serde(default)]
     pub pages: Vec<TreePage>,
+    /// Key in `fonts` of the font used by text without a font. Absent when the document has no fonts.
+    #[serde(default)]
+    pub default_font: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DocumentNode, TreeDocument};
+    use crate::model::FontWeight;
+
+    #[test]
+    fn reads_the_default_font_set_by_the_kotlin_model() {
+        let doc: TreeDocument =
+            serde_json::from_str(r#"{"fonts":{},"pages":[],"defaultFont":"Inter"}"#).expect("the document is valid");
+
+        assert_eq!(doc.default_font.as_deref(), Some("Inter"));
+    }
+
+    fn weight_of(json: &str) -> Result<FontWeight, serde_json::Error> {
+        match serde_json::from_str(json)? {
+            DocumentNode::Text { weight, .. } | DocumentNode::Paragraph { weight, .. } => Ok(weight),
+            _ => panic!("the node is not text"),
+        }
+    }
+
+    #[test]
+    fn reads_the_weight_set_by_the_kotlin_model() {
+        let semibold = FontWeight::try_from(600.0).expect("600 is a font weight");
+        let medium = FontWeight::try_from(500.0).expect("500 is a font weight");
+
+        assert_eq!(weight_of(r#"{"type":"text","content":"Fallzahlen","weight":600}"#).ok(), Some(semibold));
+        assert_eq!(weight_of(r#"{"type":"paragraph","content":"Fallzahlen","weight":500}"#).ok(), Some(medium));
+    }
+
+    #[test]
+    fn refuses_a_weight_outside_the_css_range() {
+        for weight in ["0", "1001", "-400"] {
+            let json = format!(r#"{{"type":"text","content":"Fallzahlen","weight":{weight}}}"#);
+
+            assert!(weight_of(&json).is_err(), "the weight {weight} was read");
+        }
+    }
+
+    #[test]
+    fn reads_the_ends_of_the_css_range() {
+        for weight in [1.0, 1000.0] {
+            assert_eq!(FontWeight::try_from(weight).map(FontWeight::value), Ok(weight));
+        }
+    }
+
+    #[test]
+    fn refuses_text_without_a_weight() {
+        assert!(weight_of(r#"{"type":"text","content":"Fallzahlen"}"#).is_err());
+    }
 }

@@ -1,15 +1,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
 use parley::fontique::Blob;
-use parley::style::{FontFamily, FontStack, FontWeight, FontStyle, StyleProperty};
+use parley::style::{FontFamily, FontStack, FontStyle, StyleProperty};
 use parley::{FontContext, Layout, LayoutContext, LineHeight, Alignment, AlignmentOptions};
-use skrifa::MetadataProvider;
-use skrifa::raw::types::NameId;
-
-use crate::model::{PdfColor, PdfElement};
+use crate::font_family::read_family_name;
+use crate::model::{FontWeight, PdfColor, PdfElement};
 use crate::tree::*;
 
 // ── Layout output ───────────────────────────────────────────────────────────
@@ -36,36 +32,23 @@ pub struct LayoutResult {
 
 // ── Font context setup ──────────────────────────────────────────────────────
 
-/// Read the font family name from OpenType/TrueType font data.
-fn read_family_name(data: &[u8]) -> Option<String> {
-    let font = skrifa::FontRef::from_index(data, 0).ok()?;
-    font.localized_strings(NameId::FAMILY_NAME)
-        .english_or_first()
-        .map(|s| s.chars().collect())
-}
-
 /// Register all document fonts with parley's fontique collection.
-/// Returns (blob map, name map) where name map translates user-provided names
-/// to actual font family names discovered from the font binary.
+/// Returns the name map, which translates user-provided names to actual font
+/// family names discovered from the font binary.
 pub fn register_fonts(
     font_cx: &mut FontContext,
-    fonts: &HashMap<String, crate::model::PdfFontDef>,
-) -> (HashMap<String, (Blob<u8>, u32)>, HashMap<String, String>) {
-    let mut blobs = HashMap::new();
+    files: &HashMap<String, Blob<u8>>,
+) -> HashMap<String, String> {
     let mut name_map = HashMap::new();
-    for (name, def) in fonts {
-        if let Ok(bytes) = BASE64.decode(&def.data) {
-            if let Some(actual_name) = read_family_name(&bytes) {
-                if &actual_name != name {
-                    name_map.insert(name.clone(), actual_name);
-                }
+    for (name, file) in files {
+        if let Some(actual_name) = read_family_name(file.data()) {
+            if &actual_name != name {
+                name_map.insert(name.clone(), actual_name);
             }
-            let blob: Blob<u8> = Vec::into(bytes);
-            font_cx.collection.register_fonts(blob.clone(), None);
-            blobs.insert(name.clone(), (blob, 0u32));
         }
+        let _families_are_looked_up_by_name = font_cx.collection.register_fonts(file.clone(), None);
     }
-    (blobs, name_map)
+    name_map
 }
 
 // ── Layout engine ───────────────────────────────────────────────────────────
@@ -73,7 +56,7 @@ pub fn register_fonts(
 pub struct LayoutEngine<'a> {
     font_cx: &'a mut FontContext,
     layout_cx: &'a mut LayoutContext<PdfColor>,
-    default_font: String,
+    default_font: Option<String>,
     font_name_map: HashMap<String, String>,
 }
 
@@ -81,7 +64,7 @@ impl<'a> LayoutEngine<'a> {
     pub fn new(
         font_cx: &'a mut FontContext,
         layout_cx: &'a mut LayoutContext<PdfColor>,
-        default_font: String,
+        default_font: Option<String>,
         font_name_map: HashMap<String, String>,
     ) -> Self {
         Self { font_cx, layout_cx, default_font, font_name_map }
@@ -90,7 +73,10 @@ impl<'a> LayoutEngine<'a> {
     /// Resolve a user-provided font name to the actual font family name
     /// that parley/fontique discovered from the font binary.
     fn resolve_font<'b>(&'b self, font: &'b str) -> &'b str {
-        let name = if font.is_empty() { &self.default_font } else { font };
+        let name = match &self.default_font {
+            Some(default_font) if font.is_empty() => default_font,
+            _ => font,
+        };
         self.font_name_map.get(name).map(|s| s.as_str()).unwrap_or(name)
     }
 
@@ -122,12 +108,12 @@ impl<'a> LayoutEngine<'a> {
     ) -> LayoutResult {
         match node {
             DocumentNode::Text {
-                content, font_size, font, color, align, bold, italic, line_spacing,
-            } => self.layout_text(content, *font_size, font, color, align, *bold, *italic, false, *line_spacing, x, y, max_width),
+                content, font_size, font, color, align, weight, italic, line_spacing,
+            } => self.layout_text(content, *font_size, font, color, align, *weight, *italic, false, *line_spacing, x, y, max_width),
 
             DocumentNode::Paragraph {
-                content, font_size, font, color, align, line_spacing, bold, markdown,
-            } => self.layout_text(content, *font_size, font, color, align, *bold, false, *markdown, *line_spacing, x, y, max_width),
+                content, font_size, font, color, align, line_spacing, weight, markdown,
+            } => self.layout_text(content, *font_size, font, color, align, *weight, false, *markdown, *line_spacing, x, y, max_width),
 
             DocumentNode::RichParagraph {
                 segments, font_size, font, color, line_spacing,
@@ -239,7 +225,7 @@ impl<'a> LayoutEngine<'a> {
         font: &str,
         color: &PdfColor,
         align: &TextAlign,
-        bold: bool,
+        weight: FontWeight,
         italic: bool,
         markdown: bool,
         line_spacing: f32,
@@ -315,14 +301,12 @@ impl<'a> LayoutEngine<'a> {
         builder.push_default(StyleProperty::FontStack(FontStack::List(
             Cow::Owned(vec![FontFamily::Named(Cow::Owned(font_name))])
         )));
-        if bold {
-            builder.push_default(StyleProperty::FontWeight(FontWeight::new(700.0)));
-        }
+        builder.push_default(StyleProperty::FontWeight(weight.into()));
         if italic {
             builder.push_default(StyleProperty::FontStyle(FontStyle::Italic));
         }
         for range in &md_bold {
-            builder.push(StyleProperty::FontWeight(FontWeight::new(700.0)), range.clone());
+            builder.push(StyleProperty::FontWeight(FontWeight::BOLD.into()), range.clone());
         }
         for range in &md_italic {
             builder.push(StyleProperty::FontStyle(FontStyle::Italic), range.clone());
@@ -374,7 +358,7 @@ impl<'a> LayoutEngine<'a> {
         for seg in segments {
             if seg.bold {
                 let range = offset..offset + seg.text.len();
-                builder.push(StyleProperty::FontWeight(FontWeight::new(700.0)), range);
+                builder.push(StyleProperty::FontWeight(FontWeight::BOLD.into()), range);
             }
             offset += seg.text.len();
         }
@@ -417,14 +401,14 @@ impl<'a> LayoutEngine<'a> {
         for (i, item) in items.iter().enumerate() {
             let bullet_result = self.layout_text(
                 bullet_str, font_size, font, bullet_color,
-                &TextAlign::Left, false, false, false, line_spacing,
+                &TextAlign::Left, FontWeight::NORMAL, false, false, line_spacing,
                 x, cur_y, bullet_indent,
             );
             all_items.extend(bullet_result.items);
 
             let text_result = self.layout_text(
                 item, font_size, font, color,
-                &TextAlign::Left, false, false, markdown, line_spacing,
+                &TextAlign::Left, FontWeight::NORMAL, false, markdown, line_spacing,
                 x + bullet_indent, cur_y, max_width - bullet_indent,
             );
             let item_height = text_result.height.max(bullet_result.height);
@@ -460,7 +444,7 @@ impl<'a> LayoutEngine<'a> {
         for (i, segments) in items.iter().enumerate() {
             let bullet_result = self.layout_text(
                 bullet_str, font_size, font, bullet_color,
-                &TextAlign::Left, false, false, false, line_spacing,
+                &TextAlign::Left, FontWeight::NORMAL, false, false, line_spacing,
                 x, cur_y, bullet_indent,
             );
             all_items.extend(bullet_result.items);
@@ -800,6 +784,12 @@ impl<'a> LayoutEngine<'a> {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+impl From<FontWeight> for parley::style::FontWeight {
+    fn from(weight: FontWeight) -> Self {
+        parley::style::FontWeight::new(weight.value())
+    }
+}
+
 fn to_parley_align(align: &TextAlign) -> Alignment {
     match align {
         TextAlign::Left => Alignment::Start,
@@ -819,9 +809,9 @@ fn align_x(x: f32, max_width: f32, item_width: f32, align: &TextAlign) -> f32 {
 /// Offset a PdfElement's coordinates by (dx, dy).
 fn offset_element(elem: &PdfElement, dx: f32, dy: f32) -> PdfElement {
     match elem {
-        PdfElement::Text { content, x, y, font_size, font, color } => PdfElement::Text {
+        PdfElement::Text { content, x, y, font_size, font, color, weight } => PdfElement::Text {
             content: content.clone(), x: x + dx, y: y + dy,
-            font_size: *font_size, font: font.clone(), color: color.clone(),
+            font_size: *font_size, font: font.clone(), color: color.clone(), weight: *weight,
         },
         PdfElement::Rect { x, y, width, height, fill_color, stroke_color, stroke_width, corner_radius } => PdfElement::Rect {
             x: x + dx, y: y + dy, width: *width, height: *height,

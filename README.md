@@ -30,6 +30,7 @@ commonMain.dependencies {
 
 ```kotlin
 import de.toowoxx.pdfkiesel.dsl.*
+import de.toowoxx.pdfkiesel.model.FontWeight
 import de.toowoxx.pdfkiesel.model.PdfColor
 import de.toowoxx.pdfkiesel.renderToBytes
 
@@ -37,7 +38,7 @@ val doc = pdfDocument {
     pagedContent {
         text("Hello, PDF!") {
             fontSize = 24f
-            bold = true
+            weight = FontWeight.Bold
         }
 
         spacer(12f)
@@ -73,7 +74,8 @@ val pdfBytes: ByteArray = doc.renderToBytes()
 **Text elements:**
 
 ```kotlin
-text("Single line") { fontSize = 14f; bold = true }
+text("Single line") { fontSize = 14f; weight = FontWeight.Bold }
+text("Heading") { weight = FontWeight.SemiBold } // a variable font draws any weight from 1 to 1000
 paragraph("Long text that wraps automatically...") { fontSize = 11f }
 richParagraph("Text with **bold** and *italic* markdown") { fontSize = 11f }
 ```
@@ -155,9 +157,9 @@ stack(verticalAlignment = VerticalAlignment.CenterVertically) {
 table {
     widths(150f, 200f, 100f)
     headerRow {
-        cell("Name") { bold = true }
-        cell("Description") { bold = true }
-        cell("Price") { bold = true; align = TextAlign.RIGHT }
+        cell("Name") { weight = FontWeight.Bold }
+        cell("Description") { weight = FontWeight.Bold }
+        cell("Price") { weight = FontWeight.Bold; align = TextAlign.RIGHT }
     }
     row {
         cell("Widget")
@@ -191,6 +193,10 @@ pdfDocument {
     }
 }
 ```
+
+Text without a font uses the default font: the font set with `defaultFont("MyFont")`, otherwise
+the font registered first. A default font that is not registered fails when the document is built,
+and so does a document that registers fonts without a default font.
 
 ### Page Configuration
 

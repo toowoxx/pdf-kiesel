@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -8,12 +7,13 @@ use krilla::geom::{PathBuilder, Point, Rect, Size, Transform};
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, FillRule, LineCap, LineJoin, Stroke};
-use krilla::text::{Font, GlyphId, KrillaGlyph, Tag, TextDirection};
+use krilla::text::{GlyphId, KrillaGlyph, Tag, TextDirection};
 use skrifa::MetadataProvider;
 use krilla::Document;
 use krilla_svg::{SvgSettings, SurfaceExt};
 use parley::{FontContext, LayoutContext};
 
+use crate::document_fonts::{DocumentFontUnusable, DocumentFonts};
 use crate::layout::{LayoutEngine, PositionedItem, register_fonts};
 use crate::model::{PdfColor, PdfElement};
 use crate::paginate::paginate;
@@ -632,24 +632,13 @@ fn push_rounded_rect(pb: &mut PathBuilder, x: f32, y: f32, w: f32, h: f32, r: f3
 
 // ── Tree-based rendering (parley) ───────────────────────────────────────────
 
-pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
+pub fn render_tree(doc: &TreeDocument) -> Result<Vec<u8>, DocumentFontUnusable> {
     let mut krilla_doc = Document::new();
 
-    // Set up parley font context and register all document fonts
+    let mut fonts = DocumentFonts::read(&doc.fonts, doc.default_font.as_deref())?;
     let mut font_cx = FontContext::default();
     let mut layout_cx: LayoutContext<PdfColor> = LayoutContext::new();
-    let (_font_blobs, font_name_map) = register_fonts(&mut font_cx, &doc.fonts);
-
-    // Also create krilla fonts for non-text element rendering (existing draw_text path)
-    let mut krilla_fonts: HashMap<String, Font> = HashMap::new();
-    for (name, def) in &doc.fonts {
-        if let Ok(bytes) = BASE64.decode(&def.data) {
-            if let Some(font) = Font::new(Arc::new(bytes).into(), 0) {
-                krilla_fonts.insert(name.clone(), font);
-            }
-        }
-    }
-    let fallback_font = krilla_fonts.values().next().cloned();
+    let font_name_map = register_fonts(&mut font_cx, fonts.files());
 
     for tree_page in &doc.pages {
         let margin = &tree_page.margin;
@@ -658,12 +647,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
         let content_width = (tree_page.width - margin.left - margin.right).max(0.0);
         let content_height = (tree_page.height - margin.top - margin.bottom).max(0.0);
 
-        // Determine the default font name (first registered font)
-        let default_font = doc.fonts.keys().next()
-            .cloned()
-            .unwrap_or_default();
-
-        let mut engine = LayoutEngine::new(&mut font_cx, &mut layout_cx, default_font, font_name_map.clone());
+        let mut engine = LayoutEngine::new(&mut font_cx, &mut layout_cx, doc.default_font.clone(), font_name_map.clone());
 
         // Layout + paginate
         let output_pages = paginate(
@@ -702,6 +686,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
                     PositionedItem::RichText { text, layout, x, y } => {
                         render_parley_layout(
                             &mut surface,
+                            &mut fonts,
                             text,
                             layout,
                             *x,
@@ -709,12 +694,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
                         );
                     }
                     PositionedItem::Element(element) => {
-                        render_element_ydown(
-                            &mut surface,
-                            element,
-                            &krilla_fonts,
-                            fallback_font.as_ref(),
-                        );
+                        render_element_ydown(&mut surface, &mut fonts, element)?;
                     }
                 }
             }
@@ -724,7 +704,7 @@ pub fn render_tree(doc: &TreeDocument) -> Vec<u8> {
         }
     }
 
-    krilla_doc.finish().unwrap_or_default()
+    Ok(krilla_doc.finish().unwrap_or_default())
 }
 
 /// Render a parley Layout to a krilla surface using draw_glyphs().
@@ -750,15 +730,12 @@ fn denormalize_coords(data: &[u8], index: u32, norm: &[i16]) -> Vec<(Tag, f32)> 
 
 fn render_parley_layout(
     surface: &mut krilla::surface::Surface,
+    fonts: &mut DocumentFonts,
     text: &str,
     layout: &parley::Layout<PdfColor>,
     origin_x: f32,
     origin_y: f32,
 ) {
-    // Cache key: (blob_id, normalized_coords) — different variation instances
-    // of the same variable font get separate krilla Font objects.
-    let mut font_cache: HashMap<(u64, Vec<i16>), Option<Font>> = HashMap::new();
-
     for line in layout.lines() {
         let baseline = line.metrics().baseline;
         let ky = origin_y + baseline;
@@ -766,26 +743,12 @@ fn render_parley_layout(
 
         for run in line.runs() {
             let mut cur_x = x;
-            let font_data = run.font().clone();
-            let (arc_data, blob_id) = font_data.data.into_raw_parts();
+            let font_data = run.font();
             let norm: Vec<i16> = run.normalized_coords().iter()
                 .map(|c| { let bits: [u8; 2] = c.to_be_bytes(); i16::from_be_bytes(bits) })
                 .collect();
-
-            let cache_key = (blob_id, norm.clone());
-            let krilla_font = font_cache
-                .entry(cache_key)
-                .or_insert_with(|| {
-                    if norm.is_empty() {
-                        Font::new(arc_data.clone().into(), font_data.index)
-                    } else {
-                        let raw: &[u8] = (*arc_data).as_ref();
-                        let user_coords = denormalize_coords(raw, font_data.index, &norm);
-                        Font::new_variable(arc_data.clone().into(), font_data.index, &user_coords)
-                            .or_else(|| Font::new(arc_data.clone().into(), font_data.index))
-                    }
-                });
-            let Some(krilla_font) = krilla_font else { continue };
+            let user_coords = denormalize_coords(font_data.data.data(), font_data.index, &norm);
+            let Some(krilla_font) = fonts.instance(&font_data.data, font_data.index, &user_coords) else { continue };
 
             let font_size = run.font_size();
             let mut cur_style: Option<u16> = None;
@@ -861,21 +824,18 @@ fn render_parley_layout(
 /// Used by the tree rendering path where the layout engine produces y-down coords directly.
 fn render_element_ydown(
     surface: &mut krilla::surface::Surface,
+    fonts: &mut DocumentFonts,
     element: &PdfElement,
-    fonts: &HashMap<String, Font>,
-    fallback: Option<&Font>,
-) {
+) -> Result<(), DocumentFontUnusable> {
     match element {
-        PdfElement::Text { content, x, y, font_size, font, color } => {
-            let resolved = fonts.get(font).or(fallback).cloned();
-            if let Some(f) = resolved {
-                surface.set_fill(Some(fill_from(color)));
-                surface.set_stroke(None);
-                surface.draw_text(
-                    Point::from_xy(*x, *y), f, *font_size, content,
-                    false, TextDirection::Auto,
-                );
-            }
+        PdfElement::Text { content, x, y, font_size, font, color, weight } => {
+            let font = fonts.canvas_font(font, *weight)?;
+            surface.set_fill(Some(fill_from(color)));
+            surface.set_stroke(None);
+            surface.draw_text(
+                Point::from_xy(*x, *y), font, *font_size, content,
+                false, TextDirection::Auto,
+            );
         }
         PdfElement::Rect { x, y, width, height, fill_color, stroke_color, stroke_width, corner_radius } => {
             let mut pb = PathBuilder::new();
@@ -1027,5 +987,6 @@ fn render_element_ydown(
             surface.pop();
         }
     }
+    Ok(())
 }
 

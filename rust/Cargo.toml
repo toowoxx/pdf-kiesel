@@ -19,6 +19,9 @@ base64 = "0.22"
 usvg = "0.45"
 krilla-svg = "0.3"
 
+[dev-dependencies]
+write-fonts = "=0.43.0"
+
 [features]
 default = ["android"]
 android = ["jni"]

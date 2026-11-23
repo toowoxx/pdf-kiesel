@@ -1,6 +1,7 @@
 package de.toowoxx.pdfkiesel.dsl
 
 import de.toowoxx.pdfkiesel.model.DocumentNode
+import de.toowoxx.pdfkiesel.model.FontWeight
 import de.toowoxx.pdfkiesel.model.PdfColor
 import de.toowoxx.pdfkiesel.model.PdfElement
 import de.toowoxx.pdfkiesel.model.TreeGridCell
@@ -24,7 +25,7 @@ internal data class TextNode(
     val color: PdfColor,
     val align: TextAlign,
     val lineSpacing: Float,
-    val bold: Boolean = false,
+    val weight: FontWeight = FontWeight.Normal,
     val italic: Boolean = false,
 ) : PdfView {
     override fun toNode(): DocumentNode = DocumentNode.Text(
@@ -33,7 +34,7 @@ internal data class TextNode(
         font = font,
         color = color,
         align = align.toTreeTextAlign(),
-        bold = bold,
+        weight = weight,
         italic = italic,
         lineSpacing = lineSpacing,
     )
@@ -46,7 +47,7 @@ internal data class ParagraphNode(
     val color: PdfColor,
     val align: TextAlign,
     val lineSpacing: Float,
-    val bold: Boolean = false,
+    val weight: FontWeight = FontWeight.Normal,
     val markdown: Boolean = false,
 ) : PdfView {
     override fun toNode(): DocumentNode = DocumentNode.Paragraph(
@@ -56,7 +57,7 @@ internal data class ParagraphNode(
         color = color,
         align = align.toTreeTextAlign(),
         lineSpacing = lineSpacing,
-        bold = bold,
+        weight = weight,
         markdown = markdown,
     )
 }
@@ -90,10 +91,9 @@ internal data class RectNode(
 internal class TableNode(
     private val buildBlock: TableBuilder.() -> Unit,
     private val availableWidth: Float,
-    private val defaultFont: String = "",
 ) : PdfView {
     override fun toNode(): DocumentNode {
-        val builder = TableBuilder(availableWidth, defaultFont)
+        val builder = TableBuilder(availableWidth)
         builder.buildBlock()
         return builder.buildNode()
     }
@@ -271,10 +271,9 @@ internal class CanvasNode(
     private val canvasHeight: Float,
     private val block: CanvasScope.() -> Unit,
     private val availableWidth: Float,
-    private val defaultFont: String = "",
 ) : PdfView {
     override fun toNode(): DocumentNode {
-        val scope = CanvasScope(0f, 0f, availableWidth, canvasHeight, yDown = true, defaultFont = defaultFont)
+        val scope = CanvasScope(0f, 0f, availableWidth, canvasHeight, yDown = true)
         scope.block()
         return DocumentNode.Canvas(height = canvasHeight, elements = scope.elements)
     }

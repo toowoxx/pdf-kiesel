@@ -1,5 +1,6 @@
 package de.toowoxx.pdfkiesel.dsl
 
+import de.toowoxx.pdfkiesel.model.FontWeight
 import de.toowoxx.pdfkiesel.model.PdfColor
 import de.toowoxx.pdfkiesel.model.PdfFontDef
 import de.toowoxx.pdfkiesel.model.PdfElement
@@ -23,11 +24,12 @@ inline fun pdfDocument(block: DocumentBuilder.() -> Unit): TreeDocument {
 @PdfDslMarker
 class DocumentBuilder {
     @PublishedApi internal val pages = mutableListOf<TreePage>()
-    private val fonts = mutableMapOf<String, PdfFontDef>()
-    @PublishedApi internal var defaultFont: String = ""
+    private val fonts = linkedMapOf<String, PdfFontDef>()
+    private var chosenDefaultFont: String? = null
 
+    /** Sets the font of text without a font. Without this call, that is the font registered first. */
     fun defaultFont(name: String) {
-        defaultFont = name
+        chosenDefaultFont = name
     }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -43,7 +45,7 @@ class DocumentBuilder {
         block: PageBuilder.() -> Unit,
     ) {
         val contentWidth = width - margin.left - margin.right
-        val scope = PageBuilder(contentWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(contentWidth)
         scope.block()
         pages.add(
             TreePage(
@@ -66,7 +68,7 @@ class DocumentBuilder {
         block: PageBuilder.() -> Unit,
     ) {
         val contentWidth = width - margin.left - margin.right
-        val scope = PageBuilder(contentWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(contentWidth)
         scope.block()
         pages.add(
             TreePage(
@@ -81,7 +83,7 @@ class DocumentBuilder {
     }
 
     @PublishedApi
-    internal fun build(): TreeDocument = TreeDocument(fonts.toMap(), pages.toList())
+    internal fun build() = TreeDocument(fonts.toMap(), pages.toList(), chosenDefaultFont ?: fonts.keys.firstOrNull())
 }
 
 data class Margin(
@@ -142,8 +144,16 @@ class TextStyle {
     var color: PdfColor = PdfColor.BLACK
     var align: TextAlign = TextAlign.LEFT
     var lineSpacing: Float = 1.4f
-    var bold: Boolean = false
+    var weight: FontWeight = FontWeight.Normal
     var italic: Boolean = false
+
+    /** Bold text is text at [FontWeight.Bold]. Turning bold off goes back to [FontWeight.Normal]. */
+    @Deprecated("Set the weight", ReplaceWith("weight = FontWeight.Bold", "de.toowoxx.pdfkiesel.model.FontWeight"))
+    var bold: Boolean
+        get() = weight == FontWeight.Bold
+        set(value) {
+            weight = FontWeight.of(bold = value)
+        }
 }
 
 class RectStyle {
@@ -168,7 +178,6 @@ internal constructor(
     val width: Float,
     val height: Float,
     internal val yDown: Boolean = false,
-    private val defaultFont: String = "",
 ) {
     val cx: Float
         get() = x + width / 2f
@@ -229,8 +238,7 @@ internal constructor(
 
     fun text(content: String, x: Float, y: Float, block: TextStyle.() -> Unit = {}) {
         val s = TextStyle().apply { align = TextAlign.CENTER }.apply(block)
-        val resolvedFont = s.font.ifEmpty { defaultFont }
-        val w = TextMeasure.measureWidth(content, resolvedFont, s.fontSize)
+        val w = TextMeasure.measureWidth(content, s.font, s.fontSize)
         val tx =
             when (s.align) {
                 TextAlign.LEFT -> x
@@ -238,7 +246,7 @@ internal constructor(
                 TextAlign.RIGHT -> x - w
             }
         elements.add(
-            PdfElement.Text(content, tx, y + s.fontSize * 0.3f, s.fontSize, resolvedFont, s.color)
+            PdfElement.Text(content, tx, y + s.fontSize * 0.3f, s.fontSize, s.font, s.color, s.weight)
         )
     }
 

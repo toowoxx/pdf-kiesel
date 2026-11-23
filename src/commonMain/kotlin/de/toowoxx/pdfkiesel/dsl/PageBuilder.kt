@@ -8,7 +8,6 @@ class PageBuilder
 internal constructor(
     @PublishedApi internal val availableWidth: Float,
     private val nonSplittable: Boolean = false,
-    @PublishedApi internal val defaultFont: String = "",
 ) {
     internal val children = mutableListOf<PdfView>()
 
@@ -20,12 +19,12 @@ internal constructor(
 
     fun text(content: String, block: TextStyle.() -> Unit = {}) {
         val s = TextStyle().apply(block)
-        children.add(TextNode(content, s.fontSize, s.font, s.color, s.align, s.lineSpacing, s.bold, s.italic))
+        children.add(TextNode(content, s.fontSize, s.font, s.color, s.align, s.lineSpacing, s.weight, s.italic))
     }
 
     fun paragraph(content: String, block: TextStyle.() -> Unit = {}) {
         val s = TextStyle().apply(block)
-        children.add(ParagraphNode(content, s.fontSize, s.font, s.color, s.align, s.lineSpacing, s.bold))
+        children.add(ParagraphNode(content, s.fontSize, s.font, s.color, s.align, s.lineSpacing, s.weight))
     }
 
     fun spacer(height: Float) {
@@ -44,7 +43,7 @@ internal constructor(
     }
 
     fun table(block: TableBuilder.() -> Unit) {
-        children.add(TableNode(block, availableWidth, defaultFont))
+        children.add(TableNode(block, availableWidth))
     }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
@@ -134,7 +133,7 @@ internal constructor(
         block: PageBuilder.() -> Unit,
     ) {
         val effective = if (nonSplittable) PageSplitStrategy.NONE else splitStrategy
-        val scope = PageBuilder(availableWidth, nonSplittable = effective == PageSplitStrategy.NONE, defaultFont = defaultFont)
+        val scope = PageBuilder(availableWidth, nonSplittable = effective == PageSplitStrategy.NONE)
         scope.block()
         children.add(ColumnNode(gap, scope.children, horizontalAlignment, effective))
     }
@@ -144,7 +143,7 @@ internal constructor(
         verticalAlignment: VerticalAlignment = VerticalAlignment.Top,
         block: RowScope.() -> Unit,
     ) {
-        val scope = RowScope(availableWidth, gap, defaultFont)
+        val scope = RowScope(availableWidth, gap)
         scope.block()
         children.add(RowNode(gap, scope.cells, verticalAlignment))
     }
@@ -158,7 +157,7 @@ internal constructor(
         block: PageBuilder.() -> Unit,
     ) {
         val innerWidth = availableWidth - barWidth - padding * 2
-        val scope = PageBuilder(innerWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(innerWidth)
         scope.block()
         children.add(
             AccentBarNode(color, barWidth, background, padding, cornerRadius, scope.children)
@@ -172,7 +171,7 @@ internal constructor(
         block: PageBuilder.() -> Unit,
     ) {
         val innerWidth = availableWidth - padding.left - padding.right
-        val scope = PageBuilder(innerWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(innerWidth)
         scope.block()
         children.add(PaddedNode(padding, background, cornerRadius, scope.children))
     }
@@ -193,7 +192,7 @@ internal constructor(
         block: GridScope.() -> Unit,
     ) {
         val resolvedWidths = resolveColumnWidths(columns, availableWidth)
-        val scope = GridScope(resolvedWidths, defaultFont)
+        val scope = GridScope(resolvedWidths)
         scope.block()
         children.add(GridNode(scope.rows, columns, cellPadding, borderColor))
     }
@@ -202,17 +201,17 @@ internal constructor(
         verticalAlignment: VerticalAlignment = VerticalAlignment.Top,
         block: PageBuilder.() -> Unit,
     ) {
-        val scope = PageBuilder(availableWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(availableWidth)
         scope.block()
         children.add(StackNode(scope.children, verticalAlignment))
     }
 
     fun canvas(height: Float, block: CanvasScope.() -> Unit) {
-        children.add(CanvasNode(height, block, availableWidth, defaultFont))
+        children.add(CanvasNode(height, block, availableWidth))
     }
 
     fun overlay(block: CanvasScope.() -> Unit) {
-        val scope = CanvasScope(0f, 0f, availableWidth, 0f, yDown = true, defaultFont = defaultFont)
+        val scope = CanvasScope(0f, 0f, availableWidth, 0f, yDown = true)
         scope.block()
         for (element in scope.elements) {
             children.add(OverlayNode(element))
@@ -221,7 +220,7 @@ internal constructor(
 }
 
 @PdfDslMarker
-class RowScope internal constructor(private val availableWidth: Float, private val gap: Float, private val defaultFont: String = "") {
+class RowScope internal constructor(private val availableWidth: Float, private val gap: Float) {
     private class CellDef(
         val weight: Float,
         val fixedWidth: Float?,
@@ -245,7 +244,7 @@ class RowScope internal constructor(private val availableWidth: Float, private v
             val cellWidth =
                 def.fixedWidth
                     ?: if (totalWeight > 0f) (flexSpace * def.weight / totalWeight) else 0f
-            val scope = PageBuilder(cellWidth, defaultFont = defaultFont)
+            val scope = PageBuilder(cellWidth)
             def.block(scope)
             RowCell(def.weight, def.fixedWidth, scope.children)
         }
@@ -253,25 +252,25 @@ class RowScope internal constructor(private val availableWidth: Float, private v
 }
 
 @PdfDslMarker
-class GridScope internal constructor(private val resolvedWidths: List<Float>, private val defaultFont: String = "") {
+class GridScope internal constructor(private val resolvedWidths: List<Float>) {
     internal val rows = mutableListOf<GridRowDef>()
 
     fun row(background: PdfColor? = null, block: GridRowScope.() -> Unit) {
-        val scope = GridRowScope(resolvedWidths, defaultFont)
+        val scope = GridRowScope(resolvedWidths)
         scope.block()
         rows.add(GridRowDef(scope.cells, background))
     }
 }
 
 @PdfDslMarker
-class GridRowScope internal constructor(private val widths: List<Float>, private val defaultFont: String = "") {
+class GridRowScope internal constructor(private val widths: List<Float>) {
     internal val cells = mutableListOf<GridCellDef>()
     private var colIdx = 0
 
     fun cell(span: Int = 1, block: PageBuilder.() -> Unit = {}) {
         val actualSpan = span.coerceIn(1, widths.size - colIdx)
         val cellWidth = (colIdx until colIdx + actualSpan).sumOf { widths[it].toDouble() }.toFloat()
-        val scope = PageBuilder(cellWidth, defaultFont = defaultFont)
+        val scope = PageBuilder(cellWidth)
         scope.block()
         cells.add(GridCellDef(actualSpan, scope.children))
         colIdx += actualSpan

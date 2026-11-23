@@ -13,6 +13,46 @@ impl Default for PdfColor {
     }
 }
 
+/// The weight text is drawn at, on the CSS scale: 400 is normal, 700 is bold. A variable font
+/// with a weight axis draws exactly this weight. The range and the named weights are those of
+/// `font-weight` in CSS Fonts Level 4, https://www.w3.org/TR/css-fonts-4/#font-weight-prop.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(try_from = "f32")]
+pub struct FontWeight(f32);
+
+impl FontWeight {
+    pub const NORMAL: FontWeight = FontWeight(400.0);
+    pub const BOLD: FontWeight = FontWeight(700.0);
+
+    pub fn value(self) -> f32 {
+        self.0
+    }
+}
+
+/// A weight outside the range from 1 to 1000 that CSS allows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FontWeightOutOfRange(pub f32);
+
+impl std::fmt::Display for FontWeightOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the font weight {} is not between 1 and 1000", self.0)
+    }
+}
+
+impl std::error::Error for FontWeightOutOfRange {}
+
+impl TryFrom<f32> for FontWeight {
+    type Error = FontWeightOutOfRange;
+
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        if (1.0..=1000.0).contains(&value) {
+            Ok(FontWeight(value))
+        } else {
+            Err(FontWeightOutOfRange(value))
+        }
+    }
+}
+
 /// Base64-encoded TTF/OTF font data.
 #[derive(Deserialize)]
 pub struct PdfFontDef {
@@ -45,6 +85,7 @@ pub enum PdfElement {
         font: String,
         #[serde(default)]
         color: PdfColor,
+        weight: FontWeight,
     },
     #[serde(rename = "rect", rename_all = "camelCase")]
     Rect {

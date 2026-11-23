@@ -1,3 +1,5 @@
+mod document_fonts;
+mod font_family;
 mod layout;
 mod model;
 mod paginate;
@@ -36,7 +38,8 @@ mod jni_bridge {
         let doc: crate::tree::TreeDocument = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse tree document JSON: {e}"))?;
 
-        let bytes = crate::render::render_tree(&doc);
+        let bytes = crate::render::render_tree(&doc)
+            .map_err(|e| format!("Failed to render tree document: {e}"))?;
 
         env.byte_array_from_slice(&bytes)
             .map(|a| a.into_raw())
@@ -86,7 +89,8 @@ pub unsafe extern "C" fn pdfgen_generate_tree(json: *const c_char) -> PdfGenResu
     }));
 
     match result {
-        Ok(bytes) => {
+        Ok(Err(e)) => error_result(&format!("Failed to render tree document: {e}")),
+        Ok(Ok(bytes)) => {
             let len = bytes.len();
             let boxed = bytes.into_boxed_slice();
             let ptr = Box::into_raw(boxed) as *mut u8;

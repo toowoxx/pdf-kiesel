@@ -97,7 +97,7 @@ sealed interface DocumentNode {
         val font: String = "",
         val color: PdfColor = PdfColor.BLACK,
         val align: TreeTextAlign = TreeTextAlign.LEFT,
-        val bold: Boolean = false,
+        val weight: FontWeight = FontWeight.Normal,
         val italic: Boolean = false,
         val lineSpacing: Float = 1.4f,
     ) : DocumentNode
@@ -111,7 +111,7 @@ sealed interface DocumentNode {
         val color: PdfColor = PdfColor.BLACK,
         val align: TreeTextAlign = TreeTextAlign.LEFT,
         val lineSpacing: Float = 1.4f,
-        val bold: Boolean = false,
+        val weight: FontWeight = FontWeight.Normal,
         val markdown: Boolean = false,
     ) : DocumentNode
 
@@ -276,7 +276,14 @@ data class TreePage(
 data class TreeDocument(
     val fonts: Map<String, PdfFontDef> = emptyMap(),
     val pages: List<TreePage> = emptyList(),
+    /** Key in [fonts] of the font used by text without a font. Null only when [fonts] is empty. */
+    val defaultFont: String? = null,
 ) {
+    init {
+        require(defaultFont == null || defaultFont in fonts) { "The default font $defaultFont is not registered" }
+        require(defaultFont != null || fonts.isEmpty()) { "The document registers fonts but sets no default font" }
+    }
+
     fun toJson(): String = TREE_JSON.encodeToString(this)
 
     companion object {
