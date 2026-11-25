@@ -7,6 +7,7 @@ import de.toowoxx.pdfkiesel.model.PdfElement
 import de.toowoxx.pdfkiesel.model.PdfPoint
 import de.toowoxx.pdfkiesel.model.PageSize
 import de.toowoxx.pdfkiesel.model.TreeDocument
+import de.toowoxx.pdfkiesel.model.TreeFooter
 import de.toowoxx.pdfkiesel.model.TreeMargin
 import de.toowoxx.pdfkiesel.model.TreePage
 import de.toowoxx.pdfkiesel.model.TreeSplitStrategy
@@ -82,8 +83,37 @@ class DocumentBuilder {
         )
     }
 
+    @PublishedApi internal var footer: TreeFooter? = null
+
+    /**
+     * Content drawn in the bottom margin of every page of the document, [offset] points below the
+     * end of the content area. Its text may contain [PAGE_PLACEHOLDER] and [PAGES_PLACEHOLDER],
+     * which become the number of the page and the number of pages of the whole document. The
+     * footer is laid out at the width of each page's content area and must fit into its margin;
+     * [width] is the width its builder reports as `contentWidth`, so pass the content width of the
+     * pages when it differs from an A4 portrait page with the default margins.
+     */
+    inline fun footer(
+        offset: Float = 0f,
+        width: Float = PageSize.A4_WIDTH - Margin().left - Margin().right,
+        block: PageBuilder.() -> Unit,
+    ) {
+        val scope = PageBuilder(width)
+        scope.block()
+        footer = TreeFooter(offset = offset, content = scope.buildContent())
+    }
+
     @PublishedApi
-    internal fun build() = TreeDocument(fonts.toMap(), pages.toList(), chosenDefaultFont ?: fonts.keys.firstOrNull())
+    internal fun build() =
+        TreeDocument(fonts.toMap(), pages.toList(), chosenDefaultFont ?: fonts.keys.firstOrNull(), footer)
+
+    companion object {
+        /** Becomes the number of the page in [footer] text, counted from 1. */
+        const val PAGE_PLACEHOLDER = "{page}"
+
+        /** Becomes the number of pages of the whole document in [footer] text. */
+        const val PAGES_PLACEHOLDER = "{pages}"
+    }
 }
 
 data class Margin(
@@ -168,6 +198,8 @@ class LineStyle {
     var strokeWidth: Float = 1f
     var ripple: Float = 0f
     var thicknessRipple: Float = 0f
+    /** Lengths of dash and gap in points, repeating, e.g. `listOf(9f, 5f)`; null draws a solid line. */
+    var dash: List<Float>? = null
 }
 
 @PdfDslMarker
@@ -215,7 +247,7 @@ internal constructor(
     fun line(x1: Float, y1: Float, x2: Float, y2: Float, block: LineStyle.() -> Unit = {}) {
         val s = LineStyle().apply(block)
         elements.add(
-            PdfElement.Line(x1, y1, x2, y2, s.color, s.strokeWidth, s.ripple, s.thicknessRipple)
+            PdfElement.Line(x1, y1, x2, y2, s.color, s.strokeWidth, s.ripple, s.thicknessRipple, s.dash)
         )
     }
 
@@ -262,6 +294,7 @@ internal constructor(
                 s.color,
                 s.strokeWidth,
                 s.thicknessRipple,
+                s.dash,
             )
         )
     }

@@ -114,6 +114,9 @@ pub enum PdfElement {
         ripple: f32,
         #[serde(default)]
         thickness_ripple: f32,
+        /// Lengths of dash and gap, repeating; absent for a solid line.
+        #[serde(default)]
+        dash: Option<Vec<f32>>,
     },
     #[serde(rename = "image", rename_all = "camelCase")]
     Image {
@@ -154,6 +157,9 @@ pub enum PdfElement {
         stroke_width: f32,
         #[serde(default)]
         thickness_ripple: f32,
+        /// Lengths of dash and gap, repeating; absent for a solid line.
+        #[serde(default)]
+        dash: Option<Vec<f32>>,
     },
     #[serde(rename = "svg", rename_all = "camelCase")]
     Svg {

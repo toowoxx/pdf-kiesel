@@ -97,8 +97,9 @@ internal constructor(
                 fontSize = s.fontSize,
                 font = s.font,
                 color = s.color,
-                align = TextAlign.LEFT,
+                align = s.align,
                 lineSpacing = s.lineSpacing,
+                weight = s.weight,
                 markdown = true,
             )
         )

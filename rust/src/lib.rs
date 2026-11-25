@@ -2,6 +2,7 @@ mod document_fonts;
 mod font_family;
 mod layout;
 mod model;
+mod page_numbers;
 mod paginate;
 mod render;
 mod tree;

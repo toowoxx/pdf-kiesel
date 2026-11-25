@@ -82,6 +82,8 @@ sealed interface PdfElement {
         val strokeWidth: Float = 1f,
         val ripple: Float = 0f,
         val thicknessRipple: Float = 0f,
+        /** Lengths of dash and gap, repeating; null draws a solid line. */
+        val dash: List<Float>? = null,
     ) : PdfElement
 
     @Serializable
@@ -120,6 +122,8 @@ sealed interface PdfElement {
         val color: PdfColor = PdfColor.BLACK,
         val strokeWidth: Float = 1f,
         val thicknessRipple: Float = 0f,
+        /** Lengths of dash and gap, repeating; null draws a solid line. */
+        val dash: List<Float>? = null,
     ) : PdfElement
 
     @Serializable

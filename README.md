@@ -80,6 +80,10 @@ paragraph("Long text that wraps automatically...") { fontSize = 11f }
 richParagraph("Text with **bold** and *italic* markdown") { fontSize = 11f }
 ```
 
+A `richParagraph` takes the weight and the alignment of its style like `paragraph`; its bold words
+are drawn bold on top of that weight. Italic text needs an italic face of the font: register it as
+a font of its own, and text that asks for the family in italic is set in it.
+
 **Structural elements:**
 
 ```kotlin
@@ -179,8 +183,12 @@ canvas(height = 200f) {
     rect(x = 10f, y = 10f, width = 50f, height = 30f) { fillColor = PdfColor.LIGHT_GRAY }
     polygon(listOf(50f to 0f, 100f to 50f, 0f to 50f), fill = PdfColor(0.3f, 0.8f, 0.3f))
     text("Label", x = cx, y = cy) { fontSize = 10f }
+    polyline(listOf(0f to 80f, 60f to 40f, 120f to 60f)) { strokeWidth = 2f; dash = listOf(9f, 5f) }
 }
 ```
+
+`line` and `polyline` draw dashed when `dash` lists the lengths of dash and gap in points; they
+repeat along the line. A dashed polyline ends its dashes square, a solid one rounds them.
 
 ### Custom Fonts
 
@@ -213,6 +221,30 @@ pdfDocument {
     }
 }
 ```
+
+### Footer and Page Numbers
+
+```kotlin
+pdfDocument {
+    pagedContent(margin = Margin(bottom = 60f)) { /* content... */ }
+    pagedContent(margin = Margin(bottom = 60f)) { /* starts on a new page */ }
+
+    footer(offset = 20f) {
+        row {
+            cell { text("Quarterly report") { fontSize = 8f } }
+            cell { text("Page {page} of {pages}") { fontSize = 8f; align = TextAlign.RIGHT } }
+        }
+    }
+}
+```
+
+The footer is declared once and drawn in the bottom margin of every page, `offset` points below
+the end of the content area. In its text, `{page}` becomes the number of the page and `{pages}`
+the number of pages of the whole document, counted across every `page` and `pagedContent`.
+The constants `DocumentBuilder.PAGE_PLACEHOLDER` and `PAGES_PLACEHOLDER` name them. The footer is
+laid out at the width of each page's content area and must fit into the bottom margin; nothing
+moves out of its way. Pass `width` when the pages are not A4 portrait with the default margins,
+so that `contentWidth` in the footer is the width of their content area.
 
 ## Architecture
 

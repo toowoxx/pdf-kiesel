@@ -6,7 +6,7 @@ use krilla::color::rgb;
 use krilla::geom::{PathBuilder, Point, Rect, Size, Transform};
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, FillRule, LineCap, LineJoin, Stroke};
+use krilla::paint::{Fill, FillRule, LineCap, LineJoin, Stroke, StrokeDash};
 use krilla::text::{GlyphId, KrillaGlyph, Tag, TextDirection};
 use skrifa::MetadataProvider;
 use krilla::Document;
@@ -14,10 +14,11 @@ use krilla_svg::{SvgSettings, SurfaceExt};
 use parley::{FontContext, LayoutContext};
 
 use crate::document_fonts::{DocumentFontUnusable, DocumentFonts};
-use crate::layout::{LayoutEngine, PositionedItem, register_fonts};
+use crate::layout::{LayoutEngine, LayoutResult, PositionedItem, register_fonts};
 use crate::model::{PdfColor, PdfElement};
+use crate::page_numbers::number_pages;
 use crate::paginate::paginate;
-use crate::tree::TreeDocument;
+use crate::tree::{TreeDocument, TreePage};
 
 /// Create page settings, falling back to A4 if the dimensions are invalid (zero, negative, NaN).
 fn page_settings_or_default(width: f32, height: f32) -> PageSettings {
@@ -32,6 +33,13 @@ fn paint_from(color: &PdfColor) -> krilla::paint::Paint {
         (color.b * 255.0) as u8,
     )
     .into()
+}
+
+/// The dash pattern of a stroke. A pattern that is empty or has no positive length draws solid.
+fn stroke_dash(dash: &Option<Vec<f32>>) -> Option<StrokeDash> {
+    dash.as_ref()
+        .filter(|array| array.iter().all(|length| *length >= 0.0) && array.iter().any(|length| *length > 0.0))
+        .map(|array| StrokeDash { array: array.clone(), offset: 0.0 })
 }
 
 fn fill_from(color: &PdfColor) -> Fill {
@@ -640,71 +648,74 @@ pub fn render_tree(doc: &TreeDocument) -> Result<Vec<u8>, DocumentFontUnusable> 
     let mut layout_cx: LayoutContext<PdfColor> = LayoutContext::new();
     let font_name_map = register_fonts(&mut font_cx, fonts.files());
 
+    // Lay out every page first: a footer can only name the number of pages once all are known.
+    let mut output_pages: Vec<(&TreePage, LayoutResult)> = Vec::new();
     for tree_page in &doc.pages {
         let margin = &tree_page.margin;
-        let content_x = margin.left;
-        let content_y = margin.top;
-        let content_width = (tree_page.width - margin.left - margin.right).max(0.0);
-        let content_height = (tree_page.height - margin.top - margin.bottom).max(0.0);
-
         let mut engine = LayoutEngine::new(&mut font_cx, &mut layout_cx, doc.default_font.clone(), font_name_map.clone());
-
-        // Layout + paginate
-        let output_pages = paginate(
+        let page_results = paginate(
             &mut engine,
             &tree_page.content,
-            content_x,
-            content_y,
-            content_width,
+            margin.left,
+            margin.top,
+            content_width(tree_page),
             0.0, // gap between top-level children (handled by Column/Spacer nodes)
-            content_height,
+            (tree_page.height - margin.top - margin.bottom).max(0.0),
             &tree_page.split_strategy,
         );
+        output_pages.extend(page_results.into_iter().map(|result| (tree_page, result)));
+    }
 
-        // Render each output page
-        for page_result in &output_pages {
-            let settings = page_settings_or_default(tree_page.width, tree_page.height);
-            let mut pg = krilla_doc.start_page_with(settings);
-            let mut surface = pg.surface();
+    let page_count = output_pages.len();
+    for (index, (tree_page, page_result)) in output_pages.iter().enumerate() {
+        let footer = doc.footer.as_ref().map(|footer| {
+            let mut engine = LayoutEngine::new(&mut font_cx, &mut layout_cx, doc.default_font.clone(), font_name_map.clone());
+            engine.layout_nodes(
+                &number_pages(&footer.content, index + 1, page_count),
+                tree_page.margin.left,
+                tree_page.height - tree_page.margin.bottom + footer.offset,
+                content_width(tree_page),
+            )
+        });
 
-            // Page background
-            if let Some(bg) = &tree_page.background {
-                let mut pb = PathBuilder::new();
-                if let Some(rect) = Rect::from_xywh(0.0, 0.0, tree_page.width, tree_page.height) {
-                    pb.push_rect(rect);
-                }
-                if let Some(path) = pb.finish() {
-                    surface.set_fill(Some(fill_from(bg)));
-                    surface.set_stroke(None);
-                    surface.draw_path(&path);
-                }
+        let settings = page_settings_or_default(tree_page.width, tree_page.height);
+        let mut pg = krilla_doc.start_page_with(settings);
+        let mut surface = pg.surface();
+
+        // Page background
+        if let Some(bg) = &tree_page.background {
+            let mut pb = PathBuilder::new();
+            if let Some(rect) = Rect::from_xywh(0.0, 0.0, tree_page.width, tree_page.height) {
+                pb.push_rect(rect);
             }
-
-            // Render each positioned item
-            for item in &page_result.items {
-                match item {
-                    PositionedItem::RichText { text, layout, x, y } => {
-                        render_parley_layout(
-                            &mut surface,
-                            &mut fonts,
-                            text,
-                            layout,
-                            *x,
-                            *y,
-                        );
-                    }
-                    PositionedItem::Element(element) => {
-                        render_element_ydown(&mut surface, &mut fonts, element)?;
-                    }
-                }
+            if let Some(path) = pb.finish() {
+                surface.set_fill(Some(fill_from(bg)));
+                surface.set_stroke(None);
+                surface.draw_path(&path);
             }
-
-            surface.finish();
-            pg.finish();
         }
+
+        let footer_items = footer.iter().flat_map(|footer| footer.items.iter());
+        for item in page_result.items.iter().chain(footer_items) {
+            match item {
+                PositionedItem::RichText { text, layout, x, y } => {
+                    render_parley_layout(&mut surface, &mut fonts, text, layout, *x, *y);
+                }
+                PositionedItem::Element(element) => {
+                    render_element_ydown(&mut surface, &mut fonts, element)?;
+                }
+            }
+        }
+
+        surface.finish();
+        pg.finish();
     }
 
     Ok(krilla_doc.finish().unwrap_or_default())
+}
+
+fn content_width(page: &TreePage) -> f32 {
+    (page.width - page.margin.left - page.margin.right).max(0.0)
 }
 
 /// Render a parley Layout to a krilla surface using draw_glyphs().
@@ -857,7 +868,7 @@ fn render_element_ydown(
                 surface.draw_path(&path);
             }
         }
-        PdfElement::Line { x1, y1, x2, y2, color, stroke_width, ripple, thickness_ripple } => {
+        PdfElement::Line { x1, y1, x2, y2, color, stroke_width, ripple, thickness_ripple, dash } => {
             if *thickness_ripple > 0.0 {
                 let mut pb = PathBuilder::new();
                 push_brush_stroke(&mut pb, *x1, *y1, *x2, *y2, *stroke_width, *thickness_ripple);
@@ -879,6 +890,7 @@ fn render_element_ydown(
                     surface.set_stroke(Some(Stroke {
                         paint: paint_from(color),
                         width: *stroke_width,
+                        dash: stroke_dash(dash),
                         ..Default::default()
                     }));
                     surface.draw_path(&path);
@@ -931,7 +943,7 @@ fn render_element_ydown(
                 }
             }
         }
-        PdfElement::Polyline { points, color, stroke_width, thickness_ripple } => {
+        PdfElement::Polyline { points, color, stroke_width, thickness_ripple, dash } => {
             if points.len() >= 2 {
                 if *thickness_ripple > 0.0 {
                     let kpts: Vec<(f32, f32)> = points.iter().map(|p| (p.x, p.y)).collect();
@@ -950,11 +962,14 @@ fn render_element_ydown(
                     }
                     if let Some(path) = pb.finish() {
                         surface.set_fill(None);
+                        // A round cap would grow every dash into its gap, so a dashed line ends square.
+                        let dash = stroke_dash(dash);
                         surface.set_stroke(Some(Stroke {
                             paint: paint_from(color),
                             width: *stroke_width,
-                            line_cap: LineCap::Round,
+                            line_cap: if dash.is_some() { LineCap::Butt } else { LineCap::Round },
                             line_join: LineJoin::Round,
+                            dash,
                             ..Default::default()
                         }));
                         surface.draw_path(&path);
@@ -990,3 +1005,56 @@ fn render_element_ydown(
     Ok(())
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::render_tree;
+    use crate::tree::TreeDocument;
+
+    /// Three blocks, each taller than half a page, so the document runs over three pages.
+    fn document(footer: &str) -> TreeDocument {
+        let block = r#"{"type":"rect","height":500,"fillColor":{"r":0.5,"g":0.5,"b":0.5}}"#;
+        let json = format!(
+            r#"{{"pages":[{{"splitStrategy":"SPLIT_NEAREST_VIEW","content":[{block},{block},{block}]}}]{footer}}}"#
+        );
+        serde_json::from_str(&json).expect("the document is valid")
+    }
+
+    fn page_count(pdf: &[u8]) -> usize {
+        let text = String::from_utf8_lossy(pdf);
+        text.split("/Type /Page").count() - 1 - text.matches("/Type /Pages").count()
+    }
+
+    #[test]
+    fn a_footer_is_drawn_on_every_page_without_adding_pages() {
+        let footer = r#","footer":{"offset":10,"content":[
+            {"type":"canvas","height":10,"elements":[
+                {"type":"line","x1":0,"y1":0,"x2":100,"y2":0,"dash":[4,2]}]}]}"#;
+
+        let plain = render_tree(&document("")).expect("the document renders");
+        let footed = render_tree(&document(footer)).expect("the document renders");
+
+        assert_eq!(page_count(&plain), 3);
+        assert_eq!(page_count(&footed), 3);
+        assert_ne!(plain, footed);
+    }
+
+    #[test]
+    fn a_document_without_footer_renders_as_before() {
+        let absent = render_tree(&document("")).expect("the document renders");
+        let null = render_tree(&document(r#","footer":null"#)).expect("the document renders");
+
+        assert_eq!(absent, null);
+    }
+
+    #[test]
+    fn a_dash_pattern_without_length_draws_a_solid_line() {
+        let solid = super::stroke_dash(&Some(vec![0.0, 0.0]));
+        let negative = super::stroke_dash(&Some(vec![4.0, -1.0]));
+        let dashed = super::stroke_dash(&Some(vec![9.0, 5.0]));
+
+        assert!(solid.is_none());
+        assert!(negative.is_none());
+        assert_eq!(dashed.map(|dash| dash.array), Some(vec![9.0, 5.0]));
+    }
+}

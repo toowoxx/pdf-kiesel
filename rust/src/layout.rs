@@ -481,6 +481,7 @@ impl<'a> LayoutEngine<'a> {
                 stroke_width,
                 ripple: 0.0,
                 thickness_ripple: 0.0,
+                dash: None,
             })],
             height: stroke_width,
         }
@@ -730,7 +731,7 @@ impl<'a> LayoutEngine<'a> {
                     items.push(PositionedItem::Element(PdfElement::Line {
                         x1: x, y1: cur_y + max_row_height, x2: x + max_width, y2: cur_y + max_row_height,
                         color: bc.clone(), stroke_width: 1.0,
-                        ripple: 0.0, thickness_ripple: 0.0,
+                        ripple: 0.0, thickness_ripple: 0.0, dash: None,
                     }));
                 }
             }
@@ -818,10 +819,10 @@ fn offset_element(elem: &PdfElement, dx: f32, dy: f32) -> PdfElement {
             fill_color: fill_color.clone(), stroke_color: stroke_color.clone(),
             stroke_width: *stroke_width, corner_radius: *corner_radius,
         },
-        PdfElement::Line { x1, y1, x2, y2, color, stroke_width, ripple, thickness_ripple } => PdfElement::Line {
+        PdfElement::Line { x1, y1, x2, y2, color, stroke_width, ripple, thickness_ripple, dash } => PdfElement::Line {
             x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy,
             color: color.clone(), stroke_width: *stroke_width,
-            ripple: *ripple, thickness_ripple: *thickness_ripple,
+            ripple: *ripple, thickness_ripple: *thickness_ripple, dash: dash.clone(),
         },
         PdfElement::Image { x, y, width, height, data, format } => PdfElement::Image {
             x: x + dx, y: y + dy, width: *width, height: *height,
@@ -836,9 +837,10 @@ fn offset_element(elem: &PdfElement, dx: f32, dy: f32) -> PdfElement {
             points: points.iter().map(|p| crate::model::PdfPoint { x: p.x + dx, y: p.y + dy }).collect(),
             fill_color: fill_color.clone(),
         },
-        PdfElement::Polyline { points, color, stroke_width, thickness_ripple } => PdfElement::Polyline {
+        PdfElement::Polyline { points, color, stroke_width, thickness_ripple, dash } => PdfElement::Polyline {
             points: points.iter().map(|p| crate::model::PdfPoint { x: p.x + dx, y: p.y + dy }).collect(),
             color: color.clone(), stroke_width: *stroke_width, thickness_ripple: *thickness_ripple,
+            dash: dash.clone(),
         },
         PdfElement::Svg { content, x, y, width, height } => PdfElement::Svg {
             content: content.clone(), x: x + dx, y: y + dy,
