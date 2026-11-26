@@ -456,6 +456,21 @@ pub struct TreeDocument {
     /// Key in `fonts` of the font used by text without a font. Absent when the document has no fonts.
     #[serde(default)]
     pub default_font: Option<String>,
+    /// Drawn in the bottom margin of every output page, numbered across the whole document.
+    #[serde(default)]
+    pub footer: Option<TreeFooter>,
+}
+
+/// Content repeated at the foot of every page. Its text may name the page with `{page}` and the
+/// number of pages with `{pages}`; both are filled in once the whole document is paginated.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeFooter {
+    /// Distance from the end of the content area (the top of the bottom margin) to the footer.
+    #[serde(default)]
+    pub offset: f32,
+    #[serde(default)]
+    pub content: Vec<DocumentNode>,
 }
 
 #[cfg(test)]

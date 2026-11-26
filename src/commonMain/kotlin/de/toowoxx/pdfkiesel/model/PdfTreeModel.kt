@@ -272,12 +272,21 @@ data class TreePage(
     val content: List<DocumentNode> = emptyList(),
 )
 
+/** See [de.toowoxx.pdfkiesel.dsl.DocumentBuilder.footer]. */
+@Serializable
+data class TreeFooter(
+    val offset: Float = 0f,
+    val content: List<DocumentNode> = emptyList(),
+)
+
 @Serializable
 data class TreeDocument(
     val fonts: Map<String, PdfFontDef> = emptyMap(),
     val pages: List<TreePage> = emptyList(),
     /** Key in [fonts] of the font used by text without a font. Null only when [fonts] is empty. */
     val defaultFont: String? = null,
+    /** Drawn in the bottom margin of every page, numbered across the whole document. */
+    val footer: TreeFooter? = null,
 ) {
     init {
         require(defaultFont == null || defaultFont in fonts) { "The default font $defaultFont is not registered" }
